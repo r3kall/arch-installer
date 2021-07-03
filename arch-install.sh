@@ -52,11 +52,10 @@ function system_install () {
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
   reflector --country Italy --country Germany --latest 25 --protocol https --save /etc/pacman.d/mirrorlist
-  sleep 5
+  sleep 3
   
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
   pacstrap /mnt base base-devel linux-lts linux-firmware
   
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
@@ -67,7 +66,6 @@ function system_install () {
   
   # Set root password
   ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $ch passwd
-  sleep 1
   
   ## Timezone settings
   $ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
@@ -110,16 +108,26 @@ function system_install () {
 }
 
 # Initramfs
-function initramfs() {
-  # echo 'HOOKS=(base udev autodetect keyboard keymap consolefont modconf block encrypt lvm2 resume filesystems)' >> /etc/mkinitcpio.conf
-  mkinitcpio -P
+function initramfs() {  
+  local _hooks="HOOKS=(base udev keyboard autodetect keymap consolefont modconf block resume filesystems)"
+  $ch sed -i 's/^HOOKS.*/${_hooks}/g' /mnt/etc/mkinitcpio.conf
+  $ch mkinitcpio -P
 }
 
-# Boot loader
-function bootloader() {
-  $pm dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
-  grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
-  grub-mkconfig -o /boot/grub/grub.cfg
+# Boot loader - GRUB
+function bootloader_grub() {
+  $ch $pm dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
+  $ch grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
+  $ch grub-mkconfig -o /boot/grub/grub.cfg  
+}
+
+# Boot loader - bootctl
+function bootloader_bootctl() {
+  $ch bootctl install
+  printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
+  printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
+  printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
+  $ch bootctl list
 }
 
 # User configuration
@@ -177,6 +185,8 @@ function main () {
   init
   partitioning
   system_install
+  initramfs
+  #bootloader_bootctl
 }
 
 main
