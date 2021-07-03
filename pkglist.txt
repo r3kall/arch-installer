@@ -1,0 +1,86 @@
+#### Programming Language Compilers/Interpreters and Tools
+## GTK
+#gtk2
+gtk3
+## Qt
+qt5-base
+qt5-doc
+## Assembly
+binutils
+## C/C++
+gcc
+gdb
+m4
+valgrind
+qcachegrind
+# graphviz
+## Go
+go
+## Python
+python
+python-pip
+python-setuptools
+mpdecimal
+tk
+## Java
+jre-openjdk
+## OpenCL
+opencl-headers
+#### Desktop Environment
+qtile
+dmenu
+rofi
+alacritty
+lightdm
+lightdm-gtk-greeter
+## Fonts
+ttf-dejavu
+ttf-liberation
+noto-fonts
+## Utils
+# https://wiki.archlinux.org/index.php/Desktop_notifications#Standalone
+libnotify
+notification-daemon
+reflector
+alsa-utils
+alsa-plugins
+alsa-firmware
+pulseaudio
+pulseaudio-equalizer
+pulseaudio-alsa
+pavucontrol
+pamixer
+brightnessctl
+feh
+## Daemons
+picom
+polkit-gnome
+udiskie
+ntfs-3g
+network-manager-applet
+volumeicon
+cbatticon
+unclutter
+## FM
+pcmanfm-gtk3
+glib2
+xarchiver
+gvfs
+gvfs-afc
+gvfs-mtp
+gvfs-nfs
+gvfs-smb
+## Themes
+lxappearance-gtk3
+adapta-gtk-theme
+arc-gtk-theme
+arc-solid-gtk-theme
+arc-icon-theme
+kvantum-qt5
+## Multimedia
+ffmpeg
+imagemagick
+vlc
+## Web
+qutebrowser
+chromium
