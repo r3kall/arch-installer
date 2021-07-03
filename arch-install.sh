@@ -163,8 +163,8 @@ function user_install() {
   hostnamectl | grep Virtualization | grep oracle && $ch $pm virtualbox-guest-utils
   
   $ch $pm xdg-user-dirs xdg-utils
-  nano /mnt/etc/xdg/user-dirs.defaults
-  # $ch xdg-user-dirs-update  
+  printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Documents/Music\nPICTURES=Documents/Pictures\nVIDEOS=Documents/Videos\n" > /mnt/etc/xdg/user-dirs.defaults
+  $ch xdg-user-dirs-update  
 }
 
 function pkglist () {
