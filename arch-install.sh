@@ -110,7 +110,7 @@ function system_install () {
 # Initramfs
 function initramfs() {  
   local _hooks="HOOKS=(base udev keyboard autodetect keymap consolefont modconf block resume filesystems)"
-  $ch sed -i 's/^HOOKS.*/${_hooks}/g' /mnt/etc/mkinitcpio.conf
+  $ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $ch mkinitcpio -P
 }
 
@@ -134,7 +134,7 @@ function bootloader_bootctl() {
 function user_install() {
   echo "Starting user installation..."
   # Add a new user, create its home directory and add it to the indicated groups
-  $ch useradd -mG wheel,uucp, input, optical, storage, network ${USERNAME}
+  $ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
   sleep 2
   # Uncomment wheel in sudoers
   sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
@@ -175,10 +175,6 @@ function pkglist () {
   sleep 2
   
   if $ch pacman -Qs lightdm > /dev/null; then $ch systemctl enable lightdm.service; fi
-
-  # Install AUR helper 'paru'
-  # $ch git clone https://aur.archlinux.org/paru.git
-  # $ch cd paru && makepkg -si
 }
 
 function main () {
@@ -186,8 +182,12 @@ function main () {
   partitioning
   system_install
   initramfs
-  #bootloader_bootctl
+  bootloader_bootctl
+  user_install
+  pkglist
+  
+  cp /var/log/installation.log /mnt/var/log
 }
 
 main
-# shutdown now
+shutdown now
