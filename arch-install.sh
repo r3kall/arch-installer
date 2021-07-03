@@ -25,7 +25,7 @@ function die() { local _message="${*}"; echo "${_message}"; exit; }
 
 
 function init () {
-  if ping -c 1 -W 5 google.com &> /dev/null; then echo "Arch Installer" ; else die "Ping failed. Please check your connection."; fi
+  if ping -c 1 -W 5 google.com &> /dev/null; then echo "Arch Installer"; else die "Ping failed. Please check your connection."; fi
   
   # Update the system clock
   timedatectl set-ntp true
@@ -74,11 +74,13 @@ function system_install () {
   
   ## Locale settings
   # Uncomment needed locales with sed and generate them
-  sed -i 's/^#'${LOCALE}'/'${LOCALE}'/' /mnt/etc/locale.gen && $ch locale-gen
+  sed -i "s/^#$LOCALE/$LOCALE/" /mnt/etc/locale.gen
   # Create the locale.conf file, and set the LANG variable accordingly
   echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
   # Make the changes on keyboard layout persistent in vconsole.conf
-  # echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf  
+  echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
+  
+  $ch locale-gen
 
   # Create the hostname file
   echo $HOSTNAME > /mnt/etc/hostname
@@ -104,12 +106,13 @@ function system_install () {
   $ch systemctl enable NetworkManager.service
   
   # Install bluetooth (if possible)
-  $ch lsmod | grep blue &>/dev/null && $ch $pm bluez bluez-utils && $ch systemctl enable bluetooth.service
+  # NOTE: lsmod give errors ... post-installation
+  # $ch lsmod | grep blue &>/dev/null && $ch $pm bluez bluez-utils && $ch systemctl enable bluetooth.service
 }
 
 # Initramfs
 function initramfs() {  
-  local _hooks="HOOKS=(base udev keyboard autodetect keymap consolefont modconf block resume filesystems)"
+  local _hooks="HOOKS=(base udev keyboard keymap autodetect modconf block resume filesystems)"
   $ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $ch mkinitcpio -P
 }
@@ -123,7 +126,14 @@ function bootloader_grub() {
 
 # Boot loader - bootctl
 function bootloader_bootctl() {
-  $ch bootctl install
+
+  if $ch bootctl is-installed $> /dev/null; then 
+    echo "systemd already installed";
+    $ch mkdir -p /boot/loader/entries
+  else 
+    $ch bootctl install; 
+  fi
+  
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
@@ -154,7 +164,7 @@ function user_install() {
   $ch $pm xorg xorg-xinit xterm
   sleep 3
   # Set x11 keyboard
-  $ch localectl set-x11-keymap ${KEYMAP} pc105
+  $ch localectl set-keymap ${KEYMAP}
   
   # Install NVIDIA card drivers (if needed)
   $ch lspci -k | grep "VGA" | grep "NVIDIA" && $ch $pm nvidia-lts nvidia-utils xorg-server-devel opencl-nvidia
@@ -187,6 +197,8 @@ function main () {
   pkglist
   
   cp /var/log/installation.log /mnt/var/log
+  sleep 1
+  umount -R /mnt
 }
 
 main
