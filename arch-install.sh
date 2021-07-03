@@ -154,7 +154,7 @@ function user_install() {
   $ch $pm xorg xorg-xinit xterm
   sleep 3
   # Set x11 keyboard
-  $ch localectl --no-convert set-x11-keymap ${KEYMAP} pc105
+  $ch localectl set-x11-keymap ${KEYMAP} pc105
   
   # Install NVIDIA card drivers (if needed)
   $ch lspci -k | grep "VGA" | grep "NVIDIA" && $ch $pm nvidia-lts nvidia-utils xorg-server-devel opencl-nvidia
