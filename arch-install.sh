@@ -112,7 +112,7 @@ function system_install () {
 
 # Initramfs
 function initramfs() {  
-  local _hooks="HOOKS=(base udev keyboard keymap autodetect modconf block resume filesystems)"
+  local _hooks="HOOKS=(base udev keyboard keymap autodetect modconf block filesystems)"
   $ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $ch mkinitcpio -P
 }
@@ -127,17 +127,18 @@ function bootloader_grub() {
 # Boot loader - bootctl
 function bootloader_bootctl() {
 
-  if $ch bootctl is-installed &> /dev/null; then 
-    echo "systemd already installed";
+  if $ch bootctl is-installed > /dev/null
+  then 
+    echo "systemd already installed"
     $ch mkdir -p /boot/loader/entries
   else 
-    $ch bootctl install; 
+    $ch bootctl install
   fi
   
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
-  $ch bootctl list
+  $ch bootctl status
 }
 
 # User configuration
@@ -173,7 +174,7 @@ function user_install() {
   hostnamectl | grep Virtualization | grep oracle && $ch $pm virtualbox-guest-utils
   
   $ch $pm xdg-user-dirs xdg-utils
-  printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Documents/Music\nPICTURES=Documents/Pictures\nVIDEOS=Documents/Videos\n" > /mnt/etc/xdg/user-dirs.defaults
+  printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
   $ch xdg-user-dirs-update  
 }
 
