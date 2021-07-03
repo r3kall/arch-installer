@@ -127,7 +127,7 @@ function bootloader_grub() {
 # Boot loader - bootctl
 function bootloader_bootctl() {
 
-  if $ch bootctl is-installed $> /dev/null; then 
+  if $ch bootctl is-installed &> /dev/null; then 
     echo "systemd already installed";
     $ch mkdir -p /boot/loader/entries
   else 
