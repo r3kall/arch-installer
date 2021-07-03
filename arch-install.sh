@@ -6,8 +6,11 @@ set -e
 
 
 #### Variables
-readonly USERNAME="lnz"
-readonly HOSTNAME="arch"
+readonly USERNAME="arch"
+readonly HOSTNAME="linux"
+
+readonly ROOT_PASSWORD="root"
+readonly USER_PASSWORD="admin"
 
 readonly TIMEZONE="Europe/Rome"
 readonly LOCALE="en_US.UTF-8 UTF-8"
@@ -26,6 +29,7 @@ function init () {
   
   # Update the system clock
   timedatectl set-ntp true
+  sleep 5
   
   # Generates a log file with all commands and outputs during installation
   exec &> >(tee -a "/var/log/installation.log")  
@@ -46,12 +50,13 @@ function system_install () {
   echo "Starting system installation..."
   
   # Update mirrors
-  $pm reflector
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector --country Italy --country Germany --latest 25 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-
+  reflector --country Italy --country Germany --latest 25 --protocol https --save /etc/pacman.d/mirrorlist
+  sleep 5
+  
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
+  sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
   pacstrap /mnt base base-devel linux-lts linux-firmware
   
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
@@ -61,11 +66,12 @@ function system_install () {
   genfstab -U /mnt >> /mnt/etc/fstab
   
   # Set root password
-  ( echo "root"; echo "root" ) | $ch passwd
+  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $ch passwd
+  sleep 1
   
   ## Timezone settings
   $ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
-  ${TIMEZONE} > /mnt/etc/timezone
+  echo ${TIMEZONE} > /mnt/etc/timezone
   $ch hwclock --systohc
   
   ## Locale settings
@@ -74,7 +80,7 @@ function system_install () {
   # Create the locale.conf file, and set the LANG variable accordingly
   echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
   # Make the changes on keyboard layout persistent in vconsole.conf
-  echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
+  # echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf  
 
   # Create the hostname file
   echo $HOSTNAME > /mnt/etc/hostname
@@ -97,14 +103,10 @@ function system_install () {
 
   # Install NetworkManager
   $ch $pm networkmanager
-  systemctl enable NetworkManager.service
+  $ch systemctl enable NetworkManager.service
   
-  # Set XDG env variables
-  echo "# XDG Base Directory specification" >> /mnt/etc/profile
-  echo "# https://wiki.archlinux.org/index.php/XDG_Base_Directory"  >> /mnt/etc/profile
-  echo "export XDG_CONFIG_HOME=\$HOME/.config" >> /mnt/etc/profile
-  echo "export XDG_CACHE_HOME=\$HOME/.cache" >> /mnt/etc/profile
-  echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
+  # Install bluetooth (if possible)
+  $ch lsmod | grep blue &>/dev/null && $ch $pm bluez bluez-utils && $ch systemctl enable bluetooth.service
 }
 
 # Initramfs
@@ -125,13 +127,26 @@ function user_install() {
   echo "Starting user installation..."
   # Add a new user, create its home directory and add it to the indicated groups
   $ch useradd -mG wheel,uucp, input, optical, storage, network ${USERNAME}
+  sleep 2
   # Uncomment wheel in sudoers
   sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   # Set user password
-  ( echo "admin"; echo "admin" ) | $ch passwd ${USERNAME}
+  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $ch passwd ${USERNAME}
+  sleep 1
+  
+  # Set XDG env variables
+  echo "" >> /mnt/etc/profile
+  echo "# XDG Base Directory specification" >> /mnt/etc/profile
+  echo "# https://wiki.archlinux.org/index.php/XDG_Base_Directory"  >> /mnt/etc/profile
+  echo "export XDG_CONFIG_HOME=\$HOME/.config" >> /mnt/etc/profile
+  echo "export XDG_CACHE_HOME=\$HOME/.cache" >> /mnt/etc/profile
+  echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
 
   # Install xorg suite
   $ch $pm xorg xorg-xinit xterm
+  sleep 3
+  # Set x11 keyboard
+  $ch localectl --no-convert set-x11-keymap ${KEYMAP} pc105
   
   # Install NVIDIA card drivers (if needed)
   $ch lspci -k | grep "VGA" | grep "NVIDIA" && $ch $pm nvidia-lts nvidia-utils xorg-server-devel opencl-nvidia
@@ -141,7 +156,7 @@ function user_install() {
   
   $ch $pm xdg-user-dirs xdg-utils
   nano /mnt/etc/xdg/user-dirs.defaults
-  $ch xdg-user-dirs-update
+  # $ch xdg-user-dirs-update  
 }
 
 function pkglist () {
@@ -149,7 +164,8 @@ function pkglist () {
 
   # install from package list
   sed -e '/^#/d' ./pkglist.txt | $ch $pm -
-
+  sleep 2
+  
   if $ch pacman -Qs lightdm > /dev/null; then $ch systemctl enable lightdm.service; fi
 
   # Install AUR helper 'paru'
