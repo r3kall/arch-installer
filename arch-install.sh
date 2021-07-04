@@ -99,7 +99,7 @@ function system_install () {
 
   # Install microcodes (if possible)
   grep GenuineIntel /proc/cpuinfo &>/dev/null && $ch $pm intel-ucode && echo "intel microcode installed.."
-  grep AuthenticAMD /proc/cpuinfo &>/dev/null && $ch $pm amd-ucode && echo "amd microcode installed.."  
+  # grep AuthenticAMD /proc/cpuinfo &>/dev/null && $ch $pm amd-ucode && echo "amd microcode installed.."  
 
   # Install NetworkManager
   $ch $pm networkmanager
@@ -164,8 +164,6 @@ function user_install() {
   # Install xorg suite
   $ch $pm xorg xorg-xinit xterm
   sleep 3
-  # Set x11 keyboard
-  $ch localectl set-keymap ${KEYMAP}
   
   # Install NVIDIA card drivers (if needed)
   $ch lspci -k | grep "VGA" | grep "NVIDIA" && $ch $pm nvidia-lts nvidia-utils xorg-server-devel opencl-nvidia
@@ -194,13 +192,14 @@ function main () {
   system_install
   initramfs
   bootloader_bootctl
-  user_install
-  pkglist
-  
-  cp /var/log/installation.log /mnt/var/log
-  sleep 1
-  umount -R /mnt
+  user_install  
 }
 
-main
-shutdown now
+time main
+
+cp /var/log/installation.log /mnt/var/log
+sleep 2
+ 
+umount -R /mnt/boot
+umount -R /mnt
+reboot
