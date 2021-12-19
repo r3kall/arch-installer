@@ -6,33 +6,37 @@ set -e
 
 
 #### Variables
-readonly USERNAME="arch"
-readonly HOSTNAME="linux"
+USERNAME="arch"
+HOSTNAME="linux"
 
-readonly ROOT_PASSWORD="root"
-readonly USER_PASSWORD="admin"
+ROOT_PASSWORD="root"
+USER_PASSWORD="admin"
 
-readonly TIMEZONE="Europe/Rome"
-readonly LOCALE="en_US.UTF-8 UTF-8"
-readonly KEYMAP="it"
+TIMEZONE="Europe/Rome"
+LOCALE="en_US.UTF-8 UTF-8"
+KEYMAP="it"
 
 #### Commands
-readonly pm="pacman -Sq --needed --noconfirm --color auto"
-readonly ch="arch-chroot /mnt"
+pm="pacman -Sq --needed --noconfirm --color auto"
+ch="arch-chroot /mnt"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit; }
 
 
 function init () {
-  if ping -c 1 -W 5 google.com &> /dev/null; then echo "Arch Installer"; else die "Ping failed. Please check your connection."; fi
+  if ping -c 1 -W 5 google.com &> /dev/null; then
+    echo "Arch Installer"
+  else
+    die "Ping failed, Install interrupted. Please check your connection."
+  fi
   
   # Update the system clock
   timedatectl set-ntp true
   sleep 5
   
   # Generates a log file with all commands and outputs during installation
-  exec &> >(tee -a "/var/log/installation.log")  
+  exec &> >(tee -a "/var/log/install.log")  
   set -x
 }
 
@@ -41,13 +45,13 @@ function partitioning () {
   if ! [ $fsok = 'y' ] && ! [ $fsok = 'Y' ]; then
     die "Edit the script to continue. Exiting."
   else
-    echo "Formatting partitions..."
+    echo "Formatting partitions with parted."
     /bin/bash arch-parted.sh
   fi
 }
 
 function system_install () {
-  echo "Starting system installation..."
+  echo "Starting system installation."
   
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
@@ -56,7 +60,8 @@ function system_install () {
   
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  pacstrap /mnt base base-devel linux-lts linux-firmware
+  pacstrap /mnt base base-devel linux-lts
+  !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
   
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
   sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf   
@@ -79,7 +84,6 @@ function system_install () {
   echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
   # Make the changes on keyboard layout persistent in vconsole.conf
   echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
-  
   $ch locale-gen
 
   # Create the hostname file
@@ -98,8 +102,8 @@ function system_install () {
   $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted
 
   # Install microcodes (if possible)
-  grep GenuineIntel /proc/cpuinfo &>/dev/null && $ch $pm intel-ucode && echo "intel microcode installed.."
-  # grep AuthenticAMD /proc/cpuinfo &>/dev/null && $ch $pm amd-ucode && echo "amd microcode installed.."  
+  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $ch $pm intel-ucode
+  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && $ch $pm amd-ucode
 
   # Install NetworkManager
   $ch $pm networkmanager
@@ -112,7 +116,7 @@ function system_install () {
 
 # Initramfs
 function initramfs() {  
-  local _hooks="HOOKS=(base udev keyboard keymap autodetect modconf block filesystems)"
+  local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
   $ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $ch mkinitcpio -P
 }
@@ -143,10 +147,10 @@ function bootloader_bootctl() {
 
 # User configuration
 function user_install() {
-  echo "Starting user installation..."
+  echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
   $ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
-  sleep 2
+  sleep 5
   # Uncomment wheel in sudoers
   sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   # Set user password
@@ -176,30 +180,22 @@ function user_install() {
   $ch xdg-user-dirs-update  
 }
 
-function pkglist () {
-  # expac -S -H M "%m: \t%n" $(sed -e '/^#/d' pkglist.txt) | sort -h
-
-  # install from package list
-  sed -e '/^#/d' ./pkglist.txt | $ch $pm -
-  sleep 2
-  
-  if $ch pacman -Qs lightdm > /dev/null; then $ch systemctl enable lightdm.service; fi
-}
 
 function main () {
   init
   partitioning
   system_install
   initramfs
-  bootloader_bootctl
+  bootloader_grub
   user_install  
 }
 
 time main
 
-cp /var/log/installation.log /mnt/var/log
+cp /var/log/install.log /mnt/var/log
 sleep 2
  
 umount -R /mnt/boot
 umount -R /mnt
+sleep 2
 reboot
