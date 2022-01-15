@@ -25,7 +25,7 @@ function install_aur_helper() {
   local aur_helper="paru"
   local aur_home="/home/$USER/$aur_helper"
   [ ! -d $aur_home ] && git -C /home/$USER clone https://aur.archlinux.org/paru.git
-  (cd $aur_home && makepkg -si  --needed --noconfirm && makepkg -c)
+  (cd $aur_home && makepkg -si  --needed --noconfirm)
   # uncomment "bottomup" in /etc/paru.conf
   sudo sed -i 's/#BottomUp/BottomUp/' /etc/paru.conf
   sleep 3
@@ -40,15 +40,22 @@ function install_desktop_env() {
   lspci -k | grep "VGA" | grep "NVIDIA" && $aur nvidia-lts nvidia-utils
   sleep 3
   
-  $aur ttf-dejavu nerd-fonts-noto nerd-fonts-complete-starship
+  $aur ttf-dejavu nerd-fonts-ubuntu-mono #nerd-fonts-complete-starship
   fc-cache
   
   # Install SDDM display manager 
   # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $aur sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg
+  $aur sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
   
   # Install Qtile window manager
   $aur qtile alacritty network-manager-applet alsa-utils dunst lxsession-gtk3 feh volumeicon rofi
+  
+  #TODO:
+  # - keybindings
+  # - icon theme
+  # - rofi
+  # - qutebrowser
+  # - vim/ide
 }
 
 
