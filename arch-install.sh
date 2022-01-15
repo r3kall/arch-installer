@@ -45,8 +45,11 @@ function partitioning () {
   if ! [ $fsok = 'y' ] && ! [ $fsok = 'Y' ]; then
     die "Edit the script to continue. Exiting."
   else
-    echo "Formatting partitions with parted."
-    /bin/bash arch-parted.sh
+    if [[ $(ls /sys/firmware/efi/efivars) ]]; then
+      echo "Formatting partitions with parted."
+      /bin/bash arch-parted.sh
+    else
+      die "Not EFI system. Exiting."
   fi
 }
 
@@ -56,7 +59,6 @@ function system_install () {
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
   reflector --country Italy --country Germany --latest 25 --protocol https --save /etc/pacman.d/mirrorlist
-  sleep 3
   
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
@@ -98,8 +100,10 @@ function system_install () {
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
   
   ## System upgrade
+  $ch pacman -S --noconfirm archlinux-keyring
   $ch pacman -Syyuq --noconfirm
-  $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted
+  $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog \ 
+    nano neovim htop git parted reflector
 
   # Install microcodes (if possible)
   !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $ch $pm intel-ucode
@@ -150,12 +154,15 @@ function user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
   $ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
-  sleep 5
+  
   # Uncomment wheel in sudoers
   sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   # Set user password
   ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $ch passwd ${USERNAME}
-  sleep 1
+  
+  $ch $pm xdg-user-dirs xdg-utils
+  printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
+  $ch xdg-user-dirs-update  
   
   # Set XDG env variables
   echo "" >> /mnt/etc/profile
@@ -164,20 +171,9 @@ function user_install() {
   echo "export XDG_CONFIG_HOME=\$HOME/.config" >> /mnt/etc/profile
   echo "export XDG_CACHE_HOME=\$HOME/.cache" >> /mnt/etc/profile
   echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
-
-  # Install xorg suite
-  $ch $pm xorg xorg-xinit xterm
-  sleep 3
-  
-  # Install NVIDIA card drivers (if needed)
-  $ch lspci -k | grep "VGA" | grep "NVIDIA" && $ch $pm nvidia-lts nvidia-utils xorg-server-devel opencl-nvidia
   
   # Install virtualbox addons (if needed)
   hostnamectl | grep Virtualization | grep oracle && $ch $pm virtualbox-guest-utils
-  
-  $ch $pm xdg-user-dirs xdg-utils
-  printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
-  $ch xdg-user-dirs-update  
 }
 
 
@@ -191,11 +187,9 @@ function main () {
 }
 
 time main
-
 cp /var/log/install.log /mnt/var/log
-sleep 2
  
 umount -R /mnt/boot
 umount -R /mnt
-sleep 2
+sleep 3
 reboot
