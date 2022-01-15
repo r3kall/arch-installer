@@ -34,15 +34,12 @@ function install_desktop_env() {
   $aur xorg xorg-xinit xterm
   
   # Install NVIDIA card drivers (if needed)
-  lspci -k | grep "VGA" | grep "NVIDIA" && $aur nvidia-lts \ 
-    nvidia-utils xorg-server-devel opencl-nvidia
+  lspci -k | grep "VGA" | grep "NVIDIA" && $aur nvidia-lts nvidia-utils xorg-server-devel opencl-nvidia
 }
 
 
 function install_shell() {
-  $aur zsh \ 
-    zsh-completions zsh-autosuggestions zsh-syntax-highlighting \ 
-    zsh-history-substring-search zsh-theme-powerlevel10k
+  $aur zsh zsh-completions zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search zsh-theme-powerlevel10k
   
   chsh -s /usr/bin/zsh
 }
