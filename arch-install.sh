@@ -50,6 +50,7 @@ function partitioning () {
       /bin/bash arch-parted.sh
     else
       die "Not EFI system. Exiting."
+    fi
   fi
 }
 
@@ -100,10 +101,8 @@ function system_install () {
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
   
   ## System upgrade
-  $ch pacman -S --noconfirm archlinux-keyring
   $ch pacman -Syyuq --noconfirm
-  $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog \ 
-    nano neovim htop git parted reflector
+  $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted reflector
 
   # Install microcodes (if possible)
   !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $ch $pm intel-ucode
