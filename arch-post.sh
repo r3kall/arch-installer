@@ -45,10 +45,10 @@ function install_desktop_env() {
   
   # Install SDDM display manager 
   # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $aur sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
+  $aur sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
   
   # Install Qtile window manager
-  $aur qtile alacritty network-manager-applet alsa-utils dunst lxsession-gtk3 feh volumeicon rofi
+  $aur qtile alacritty network-manager-applet alsa-utils dunst lxsession-gtk3 feh volumeicon rofi bat
   
   #TODO:
   # - keybindings
