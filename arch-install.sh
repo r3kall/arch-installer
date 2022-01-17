@@ -102,7 +102,7 @@ function system_install () {
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
   
   ## System upgrade
-  $ch pacman -S archlinux-keyring
+  $ch pacman -S --needed --noconfirm archlinux-keyring
   $ch pacman -Syyuq --noconfirm
   $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted reflector
 
