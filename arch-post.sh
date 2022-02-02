@@ -40,7 +40,7 @@ function install_desktop_env() {
   lspci -k | grep "VGA" | grep "NVIDIA" && $aur nvidia-lts nvidia-utils
   sleep 3
   
-  $aur ttf-dejavu nerd-fonts-ubuntu-mono #nerd-fonts-complete-starship
+  $aur ttf-dejavu nerd-fonts-ubuntu-mono nerd-fonts-hack hicolor-icon-theme arc-icon-theme
   fc-cache
   
   # Install SDDM display manager 
@@ -49,12 +49,10 @@ function install_desktop_env() {
   sudo systemctl enable sddm
   
   # Install Qtile window manager
-  $aur qtile alacritty network-manager-applet alsa-utils dunst lxsession-gtk3 feh volumeicon rofi bat
+  $aur qtile alacritty network-manager-applet alsa-utils dunst lxsession-gtk3 feh volumeicon rofi bat lxappearance-gtk3
   
-  #TODO:
+  # TODO:
   # - keybindings
-  # - icon theme
-  # - rofi
   # - qutebrowser
   # - vim/ide
 }
