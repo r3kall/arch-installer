@@ -17,7 +17,7 @@ LOCALE="en_US.UTF-8 UTF-8"
 KEYMAP="it"
 
 #### Commands
-pm="pacman -Sq --needed --noconfirm --color auto"
+pm="pacman -Sq --needed --noconfirm"
 ch="arch-chroot /mnt"
 
 
@@ -102,7 +102,7 @@ function system_install () {
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
   
   ## System upgrade
-  $ch pacman -S --needed --noconfirm archlinux-keyring
+  $ch $pm archlinux-keyring
   $ch pacman -Syyuq --noconfirm
   $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted reflector
 
@@ -156,8 +156,9 @@ function user_install() {
   # Add a new user, create its home directory and add it to the indicated groups
   $ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
   
-  # Uncomment wheel in sudoers
-  sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
+  # Add sudoer privileges
+  # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
+  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/wheel
   # Set user password
   ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $ch passwd ${USERNAME}
   
