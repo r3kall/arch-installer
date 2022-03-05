@@ -1,72 +1,102 @@
 #!/bin/bash
 set -e
 
-#### Commands
-aur="paru -Sq --needed --noconfirm --color auto"
+AUR="paru -Sq --needed --noconfirm --color auto"
+SL=3
 
-function die() { local _message="${*}"; echo "${_message}"; exit; }
+function die() { local _message="${*}"; echo "${_message}"; exit 1; }
 
 
 function init () {
   if ping -c 1 -W 5 google.com &> /dev/null; then
     echo "Arch Post-Install"
   else
-    die "Ping failed, Install interrupted. Please check your connection."
+    die "You are offline, check your connection."
   fi
   
   exec &> >(sudo tee -a "/var/log/post.log")  
   set -x
   
   sudo pacman -Syyuq --noconfirm
+  sleep $SL
 }
 
 
-function install_aur_helper() {
+function aur_helper() {
   local aur_helper="paru"
   local aur_home="/home/$USER/$aur_helper"
   [ ! -d $aur_home ] && git -C /home/$USER clone https://aur.archlinux.org/paru.git
-  (cd $aur_home && makepkg -si  --needed --noconfirm)
-  # uncomment "bottomup" in /etc/paru.conf
+  (cd $aur_home && makepkg -si --needed --noconfirm)
   sudo sed -i 's/#BottomUp/BottomUp/' /etc/paru.conf
-  sleep 3
+  rm -Rf ${aur_home}
+  sleep $SL
 }
 
-function install_desktop_env() {
-  # Install xorg suite
-  $aur xorg xorg-xinit xterm
-  sleep 3
+
+function core() {
+  $AUR   \
+    bat  \
+    exa  \ 
+    fd   \
+    dust
+}
+
+
+function terminal() {
+  $AUR \
+    alacritty \
+    zsh \
+    starship \
+    zsh-completions \
+    zsh-autosuggestions \
+    zsh-syntax-highlighting \
+    zsh-history-substring-search
   
-  # Install NVIDIA card drivers (if needed)
-  lspci -k | grep "VGA" | grep "NVIDIA" && $aur nvidia-lts nvidia-utils
-  sleep 3
+  chsh -s /usr/bin/zsh
+}
+
+
+function fonts() {
+  $AUR \
+    ttf-dejavu \
+    nerd-fonts-ubuntu-mono \
+    nerd-fonts-hack
   
-  $aur ttf-dejavu nerd-fonts-ubuntu-mono nerd-fonts-hack hicolor-icon-theme arc-icon-theme
   fc-cache
-  
+}
+
+
+function icons() {
+  $AUR \
+    hicolor-icon-theme \
+    arc-icon-theme
+}
+
+
+function xserver() {
+  $AUR xorg xorg-init xterm
+}
+
+
+function dm() {
   # Install SDDM display manager 
   # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
   $aur sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
   sudo systemctl enable sddm
-  
-  # Install Qtile window manager
-  $aur qtile alacritty network-manager-applet alsa-utils dunst lxsession-gtk3 feh volumeicon rofi bat lxappearance-gtk3
-  
-  # TODO:
-  # - keybindings
-  # - qutebrowser
-  # - vim/ide
 }
 
 
-function install_pkg() {  
-  sed -e '/^#/d' pkglist.txt | $aur -
-  sleep 5
-}
-
-
-function install_shell() {
-  $aur zsh starship zsh-completions zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search #zsh-theme-powerlevel10k  
-  chsh -s /usr/bin/zsh
+function de() {
+  $AUR \
+    qtile \
+    rofi \
+    network-manager-applet \
+    alsa-utils \
+    dunst \
+    lxsession-gtk3 \
+    feh \
+    volumeicon \
+    lxappearance-gtk3
 }
 
 
@@ -80,17 +110,19 @@ function dotfiles() {
 
 function main() {
   init
-  install_aur_helper
-  install_desktop_env
-  # install_pkg
-  install_shell
+  aur_helper
+  
+  core
+  terminal
+  fonts
+  icons
+  xserver
+  dm
+  de
   dotfiles
 }
 
 time main
 
 sudo reboot
-
-
-
-  
+ 
