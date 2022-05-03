@@ -18,16 +18,31 @@ function init () {
   
   exec &> >(sudo tee -a "/var/log/post.log")  
   set -x
-  
+
+  sleep $SL
+}
+
+
+function core() {
   sudo pacman -Syyuq --noconfirm
 
-  sudo pacman -Sq -noconfirm --needed --color auto \
+  sudo pacman -Sq --noconfirm --needed \
     gcc \
     python \
     rust \
     go
 
-  sleep $SL
+  # Install Docker
+  sudo pacman -Sq --noconfirm docker
+  sudo groupadd docker
+  sudo usermod -aG docker $USER
+  
+  # Enable native overlay diff engine
+  sudo echo "options overlay metacopy=off redirect_dir=off" > /etc/modprobe.d/disable-overlay-redirect-dir.conf
+  sudo modprobe -r overlay
+  sudo modprobe overlay
+  sudo systemctl enable docker
+
 }
 
 
@@ -39,15 +54,6 @@ function aur_helper() {
   sudo sed -i 's/#BottomUp/BottomUp/' /etc/paru.conf
   rm -Rf ${aur_home}
   sleep $SL
-}
-
-
-function core() {
-  $AUR   \
-    bat  \
-    exa  \
-    fd   \
-    dust
 }
 
 
@@ -89,7 +95,7 @@ function xserver() {
 function dm() {
   # Install SDDM display manager 
   # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $aur sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
+  $AUR sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
   sudo systemctl enable sddm
 }
 
@@ -116,16 +122,27 @@ function dotfiles() {
 }
 
 function extra() {
+  # Extras
+  $AUR   \
+    bat  \
+    exa  \
+    fd   \
+    dust
+  
+  # Spacevim
+  curl -sLf https://spacevim.org/install.sh | bash
+
+  # Nodejs
+  $AUR \
+    npm \
+    nvm
+  
+  # Heavy Extras
   $AUR \
     google-chrome \
     spotify \
     vscodium-bin
-
-  curl -sLf https://spacevim.org/install.sh | bash
-
-  $AUR \
-    npm \
-    nvm
+  
 }
 
 
@@ -147,4 +164,4 @@ function main() {
 time main
 
 sudo reboot
- 
+
