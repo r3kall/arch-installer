@@ -34,11 +34,11 @@ function core() {
 
   # Install Docker
   sudo pacman -Sq --noconfirm docker
-  sudo groupadd docker
+  sudo groupadd -f docker
   sudo usermod -aG docker $USER
   
   # Enable native overlay diff engine
-  sudo echo "options overlay metacopy=off redirect_dir=off" > /etc/modprobe.d/disable-overlay-redirect-dir.conf
+  echo "options overlay metacopy=off redirect_dir=off" | sudo tee /etc/modprobe.d/disable-overlay-redirect-dir.conf
   sudo modprobe -r overlay
   sudo modprobe overlay
   sudo systemctl enable docker
@@ -148,9 +148,9 @@ function extra() {
 
 function main() {
   init
+  core
   aur_helper
   
-  core
   terminal
   fonts
   icons
