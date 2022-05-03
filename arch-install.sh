@@ -59,7 +59,7 @@ function system_install () {
   
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector -c Italy, Germany, France -l 10 -p https --save /etc/pacman.d/mirrorlist
+  reflector --country Italy,Germany,France -l 10 -p https --save /etc/pacman.d/mirrorlist
   sleep 5
   
   # Install essential packages
