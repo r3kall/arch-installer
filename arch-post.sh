@@ -1,23 +1,32 @@
 #!/bin/bash
 set -e
 
+## Commands
 AUR="paru -Sq --needed --noconfirm --color auto"
 SL=3
+
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
 
 
 function init () {
   if ping -c 1 -W 5 google.com &> /dev/null; then
-    echo "Arch Post-Install"
+    echo "Arch Post-Install."
   else
-    die "You are offline, check your connection."
+    die "Arch Post-Install: no connection."
   fi
   
   exec &> >(sudo tee -a "/var/log/post.log")  
   set -x
   
   sudo pacman -Syyuq --noconfirm
+
+  sudo pacman -Sq -noconfirm --needed --color auto \
+    gcc \
+    python \
+    rust \
+    go
+
   sleep $SL
 }
 
@@ -36,7 +45,7 @@ function aur_helper() {
 function core() {
   $AUR   \
     bat  \
-    exa  \ 
+    exa  \
     fd   \
     dust
 }
@@ -68,8 +77,7 @@ function fonts() {
 
 function icons() {
   $AUR \
-    hicolor-icon-theme \
-    arc-icon-theme
+    hicolor-icon-theme
 }
 
 
@@ -107,6 +115,19 @@ function dotfiles() {
   $config config --local status.showUntrackedFiles no
 }
 
+function extra() {
+  $AUR \
+    google-chrome \
+    spotify \
+    vscodium-bin
+
+  curl -sLf https://spacevim.org/install.sh | bash
+
+  $AUR \
+    npm \
+    nvm
+}
+
 
 function main() {
   init
@@ -120,6 +141,7 @@ function main() {
   dm
   de
   dotfiles
+  extra
 }
 
 time main

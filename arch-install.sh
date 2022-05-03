@@ -17,8 +17,8 @@ LOCALE="en_US.UTF-8 UTF-8"
 KEYMAP="it"
 
 #### Commands
-pm="pacman -Sq --needed --noconfirm"
-ch="arch-chroot /mnt"
+PM="pacman -Sq --needed --noconfirm"
+CH="arch-chroot /mnt"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit; }
@@ -26,9 +26,9 @@ function die() { local _message="${*}"; echo "${_message}"; exit; }
 
 function init () {
   if ping -c 1 -W 5 google.com &> /dev/null; then
-    echo "Arch Installer"
+    echo "Arch Installer starting."
   else
-    die "Ping failed, Install interrupted. Please check your connection."
+    die "Arch Installer stopping: no connection."
   fi
   
   # Update the system clock
@@ -59,7 +59,7 @@ function system_install () {
   
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector -c Italy -c Germany -c France -l 15 -p https --save /etc/pacman.d/mirrorlist
+  reflector -c Italy, Germany, France -l 10 -p https --save /etc/pacman.d/mirrorlist
   sleep 5
   
   # Install essential packages
@@ -74,12 +74,12 @@ function system_install () {
   genfstab -U /mnt >> /mnt/etc/fstab
   
   # Set root password
-  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $ch passwd
+  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $CH passwd
   
   ## Timezone settings
-  $ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+  $CH ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
   echo ${TIMEZONE} > /mnt/etc/timezone
-  $ch hwclock --systohc
+  $CH hwclock --systohc
   
   ## Locale settings
   # Uncomment needed locales with sed and generate them
@@ -88,7 +88,7 @@ function system_install () {
   echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
   # Make the changes on keyboard layout persistent in vconsole.conf
   echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
-  $ch locale-gen
+  $CH locale-gen
 
   # Create the hostname file
   echo $HOSTNAME > /mnt/etc/hostname
@@ -102,17 +102,17 @@ function system_install () {
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
   
   ## System upgrade
-  $ch $pm archlinux-keyring
-  $ch pacman -Syyuq --noconfirm
-  $ch $pm linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted reflector
+  $CH $PM archlinux-keyring
+  $CH pacman -Syyuq --noconfirm
+  $CH $PM linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted reflector
 
   # Install microcodes (if possible)
-  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $ch $pm intel-ucode
-  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && $ch $pm amd-ucode
+  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $CH $PM intel-ucode
+  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && $CH $PM amd-ucode
 
   # Install NetworkManager
-  $ch $pm networkmanager
-  $ch systemctl enable NetworkManager.service
+  $CH $PM networkmanager
+  $CH systemctl enable NetworkManager.service
   
   # Install bluetooth (if possible)
   # NOTE: lsmod give errors ... post-installation
@@ -122,49 +122,49 @@ function system_install () {
 # Initramfs
 function initramfs() {  
   local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
-  $ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
-  $ch mkinitcpio -P
+  $CH sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
+  $CH mkinitcpio -P
 }
 
 # Boot loader - GRUB
 function bootloader_grub() {
-  $ch $pm dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
-  $ch grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
-  $ch grub-mkconfig -o /boot/grub/grub.cfg  
+  $CH $PM dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
+  $CH grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
+  $CH grub-mkconfig -o /boot/grub/grub.cfg  
 }
 
 # Boot loader - bootctl
 function bootloader_bootctl() {
 
-  if $ch bootctl is-installed > /dev/null
+  if $CH bootctl is-installed > /dev/null
   then 
     echo "systemd already installed"
-    $ch mkdir -p /boot/loader/entries
+    $CH mkdir -p /boot/loader/entries
   else 
-    $ch bootctl install
+    $CH bootctl install
   fi
   
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
-  $ch bootctl status
+  $CH bootctl status
 }
 
 # User configuration
 function user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
-  $ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
+  $CH useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
   
   # Add sudoer privileges
   # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/wheel
   # Set user password
-  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $ch passwd ${USERNAME}
+  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $CH passwd ${USERNAME}
   
-  $ch $pm xdg-user-dirs xdg-utils
+  $CH $PM xdg-user-dirs xdg-utils
   printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
-  $ch xdg-user-dirs-update  
+  $CH xdg-user-dirs-update  
   
   # Set XDG env variables
   echo "" >> /mnt/etc/profile
@@ -175,7 +175,7 @@ function user_install() {
   echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
   
   # Install virtualbox addons (if needed)
-  hostnamectl | grep Virtualization | grep oracle && $ch $pm virtualbox-guest-utils
+  hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
 }
 
 
@@ -193,5 +193,5 @@ cp /var/log/install.log /mnt/var/log
  
 umount -R /mnt/boot
 umount -R /mnt
-sleep 3
+sleep 5
 reboot
