@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e
 
+####
+DE="gnome"
+####
+
 ## Commands
 AUR="paru -Sq --needed --noconfirm --color auto"
-SL=3
+SL="sleep 3"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
@@ -19,7 +23,7 @@ function init () {
   exec &> >(sudo tee -a "/var/log/post.log")  
   set -x
 
-  sleep $SL
+  $SL
 }
 
 
@@ -27,9 +31,9 @@ function core() {
   sudo pacman -Syyuq --noconfirm
 
   sudo pacman -Sq --noconfirm --needed \
-    gcc \
+    gcc    \
     python \
-    rust \
+    rust   \
     go
 
   # Install Docker
@@ -42,7 +46,7 @@ function core() {
   sudo modprobe -r overlay
   sudo modprobe overlay
   sudo systemctl enable docker
-
+  $SL
 }
 
 
@@ -53,21 +57,22 @@ function aur_helper() {
   (cd $aur_home && makepkg -si --needed --noconfirm)
   sudo sed -i 's/#BottomUp/BottomUp/' /etc/paru.conf
   rm -Rf ${aur_home}
-  sleep $SL
+  $SL
 }
 
 
 function terminal() {
-  $AUR \
+  $AUR        \
     alacritty \
-    zsh \
-    starship \
+    zsh       \
+    starship  \
     zsh-completions \
     zsh-autosuggestions \
     zsh-syntax-highlighting \
     zsh-history-substring-search
   
   chsh -s /usr/bin/zsh
+  $SL
 }
 
 
@@ -78,39 +83,37 @@ function fonts() {
     nerd-fonts-hack
   
   fc-cache
+  $SL
 }
 
 
 function icons() {
   $AUR \
     hicolor-icon-theme
+  $SL
 }
 
 
 function xserver() {
   $AUR xorg xorg-xinit xterm
+  $SL
 }
 
 
-function dm() {
-  # Install SDDM display manager 
-  # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $AUR sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
-  sudo systemctl enable sddm
-}
-
-
-function de() {
-  $AUR \
-    qtile \
-    rofi \
-    network-manager-applet \
-    alsa-utils \
-    dunst \
-    lxsession-gtk3 \
-    feh \
-    volumeicon \
-    lxappearance-gtk3
+function extra() {
+  # Extras
+  $AUR   \
+    bat  \
+    exa  \
+    fd   \
+    dust \
+    google-chrome \
+    spotify       \
+    vscodium-bin
+  
+  # Spacevim
+  curl -sLf https://spacevim.org/install.sh | bash
+  $SL
 }
 
 
@@ -119,28 +122,11 @@ function dotfiles() {
   local config="/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME"
   $config checkout
   $config config --local status.showUntrackedFiles no
-}
-
-function extra() {
-  # Extras
-  $AUR   \
-    bat  \
-    exa  \
-    fd   \
-    dust
-  
-  # Spacevim
-  curl -sLf https://spacevim.org/install.sh | bash
-  
-  # Heavy Extras
-  $AUR \
-    google-chrome \
-    spotify \
-    vscodium-bin
+  $SL
 }
 
 
-function main() {
+function common() {
   init
   core
   aur_helper
@@ -149,13 +135,58 @@ function main() {
   fonts
   icons
   xserver
-  dm
-  de
-  dotfiles
+}
+
+
+function install_sddm() {
+  # Install SDDM display manager 
+  # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
+  $AUR sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
+  sudo systemctl enable sddm
+  $SL
+}
+
+
+function install_qtile() {
+  $AUR    \
+    qtile \
+    rofi  \
+    dunst \
+    feh   \
+    alsa-utils \
+    volumeicon \
+    lxsession-gtk3 \
+    lxappearance-gtk3 \
+    network-manager-applet
+  $SL
+}
+
+
+function install_gnome() {
+  $AUR gnome gnome-shell-extensions gnome-tweaks matcha-gtk-theme qogir-icon-theme
+  sudo systemctl enable gdm.service
+}
+
+
+function main() {
+  common
+
+  case $DE in
+    "gnome")
+      echo -n "Installing GNOME desktop environment."
+      install_gnome
+      ;;
+    *)
+      echo -n "Invalid variiable name."
+      exit 1
+      ;;
+  esac
+
   extra
+  dotfiles
 }
 
 time main
-
+$SL
 sudo reboot
 
