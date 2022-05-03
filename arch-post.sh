@@ -88,7 +88,7 @@ function icons() {
 
 
 function xserver() {
-  $AUR xorg xorg-init xterm
+  $AUR xorg xorg-xinit xterm
 }
 
 
@@ -131,18 +131,12 @@ function extra() {
   
   # Spacevim
   curl -sLf https://spacevim.org/install.sh | bash
-
-  # Nodejs
-  $AUR \
-    npm \
-    nvm
   
   # Heavy Extras
   $AUR \
     google-chrome \
     spotify \
     vscodium-bin
-  
 }
 
 
