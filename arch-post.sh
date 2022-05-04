@@ -7,7 +7,7 @@ DE="gnome"
 
 ## Commands
 AUR="paru -Sq --needed --noconfirm --color auto"
-SL="sleep 3"
+SL="sleep 1"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
@@ -71,7 +71,7 @@ function terminal() {
     zsh-syntax-highlighting \
     zsh-history-substring-search
   
-  chsh -s /usr/bin/zsh
+  sudo chsh -s /bin/zsh
   $SL
 }
 
@@ -127,7 +127,6 @@ function dotfiles() {
 
 
 function common() {
-  init
   core
   aur_helper
   
@@ -135,6 +134,7 @@ function common() {
   fonts
   icons
   xserver
+  $SL
 }
 
 
@@ -163,12 +163,17 @@ function install_qtile() {
 
 
 function install_gnome() {
-  $AUR gnome gnome-shell-extensions gnome-tweaks matcha-gtk-theme qogir-icon-theme
+  $AUR gnome gnome-shell-extensions gnome-tweaks 
   sudo systemctl enable gdm.service
+  
+  # themes
+  $AUR matcha-gtk-theme qogir-icon-theme
+  $SL
 }
 
 
 function main() {
+  init
   common
 
   case $DE in
@@ -184,6 +189,7 @@ function main() {
 
   extra
   dotfiles
+  $SL
 }
 
 time main
