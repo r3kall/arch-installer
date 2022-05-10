@@ -64,6 +64,7 @@ function aur_helper() {
 function terminal() {
   $AUR        \
     alacritty \
+    vivid     \
     zsh       \
     starship  \
     zsh-completions \
@@ -110,7 +111,7 @@ function extra() {
     google-chrome \
     spotify       \
     vscodium-bin
-  
+
   # Spacevim
   curl -sLf https://spacevim.org/install.sh | bash
   $SL
