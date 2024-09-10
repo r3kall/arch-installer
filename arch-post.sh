@@ -162,9 +162,9 @@ function extra() {
     neovim
 
   # flatpak install flathub com.google.Chrome
-  flatpak install flathub com.brave.Browser
-  flatpak install flathub com.spotify.Client
-  flatpak install flathub com.visualstudio.code
+  flatpak install -y --noninteractive flathub com.brave.Browser
+  flatpak install -y --noninteractive flathub com.spotify.Client
+  flatpak install -y --noninteractive flathub com.visualstudio.code
   $SL
 }
 
