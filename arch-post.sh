@@ -7,7 +7,7 @@ DE="gnome"
 
 ## Commands
 AUR="paru -Sq --needed --noconfirm --color auto"
-SL="sleep 1"
+SL="sleep 2"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
@@ -31,10 +31,13 @@ function core() {
   sudo pacman -Syyuq --noconfirm
 
   sudo pacman -Sq --noconfirm --needed \
-    gcc    \
-    python \
-    rustup   \
-    go
+    gcc     \
+    python  \
+    rustup  \
+    go      \
+    flatpak \
+
+  rustup default stable
 
   # Install Docker
   sudo pacman -Sq --noconfirm docker
@@ -53,7 +56,7 @@ function core() {
 function aur_helper() {
   local aur_helper="paru"
   local aur_home="/home/$USER/$aur_helper"
-  if [ ! hash $aur_helper ]; then
+  if ! hash $aur_helper; then
     [ ! -d $aur_home ] && git -C /home/$USER clone https://aur.archlinux.org/paru.git
     (cd $aur_home && makepkg -si --needed --noconfirm)
     sudo sed -i 's/#BottomUp/BottomUp/' /etc/paru.conf
@@ -153,10 +156,12 @@ function extra() {
     exa  \
     fd   \
     dust \
-    neovim \
-    google-chrome \
-    spotify       \
-    vscodium-bin
+    neovim
+
+  # flatpak install flathub com.google.Chrome
+  flatpak install flathub com.brave.Browser
+  flatpak install flathub com.spotify.Client
+  flatpak install flathub com.visualstudio.code
   $SL
 }
 

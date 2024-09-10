@@ -19,6 +19,7 @@ KEYMAP="it"
 #### Commands
 PM="pacman -Sq --needed --noconfirm"
 CH="arch-chroot /mnt"
+SL="sleep 2"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit; }
@@ -30,14 +31,15 @@ function init () {
   else
     die "Arch Installer stopping: no connection."
   fi
-  
+
   # Update the system clock
   timedatectl set-ntp true
-  sleep 5
-  
+  sleep 10
+
   # Generates a log file with all commands and outputs during installation
-  exec &> >(tee -a "/var/log/install.log")  
+  exec &> >(tee -a "/var/log/install.log")
   set -x
+  $SL
 }
 
 function partitioning () {
@@ -52,35 +54,36 @@ function partitioning () {
       die "Not EFI system. Exiting."
     fi
   fi
+  $SL
 }
 
 function system_install () {
   echo "Starting system installation."
-  
+
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
   reflector --country Italy,Germany,France -l 10 -p https --save /etc/pacman.d/mirrorlist
-  sleep 5
-  
+  sleep 10
+
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
   pacstrap /mnt base base-devel linux-lts
   !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
-  
+
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
-  sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf   
+  sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
 
   # Generate an fstab file
   genfstab -U /mnt >> /mnt/etc/fstab
-  
+
   # Set root password
   ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $CH passwd
-  
+
   ## Timezone settings
   $CH ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
   echo ${TIMEZONE} > /mnt/etc/timezone
   $CH hwclock --systohc
-  
+
   ## Locale settings
   # Uncomment needed locales with sed and generate them
   sed -i "s/^#$LOCALE/$LOCALE/" /mnt/etc/locale.gen
@@ -100,7 +103,7 @@ function system_install () {
   echo "::1               localhost ip6-localhost ip6-loopback" >> /mnt/etc/hosts
   echo "ff02::1           ip6-allnodes" >> /mnt/etc/hosts
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
-  
+
   ## System upgrade
   $CH $PM archlinux-keyring
   $CH pacman -Syyuq --noconfirm
@@ -113,41 +116,46 @@ function system_install () {
   # Install NetworkManager
   $CH $PM networkmanager
   $CH systemctl enable NetworkManager.service
-  
+
   # Install bluetooth (if possible)
   # NOTE: lsmod give errors ... post-installation
   # $ch lsmod | grep blue &>/dev/null && $ch $pm bluez bluez-utils && $ch systemctl enable bluetooth.service
+  $SL
 }
 
 # Initramfs
-function initramfs() {  
+function initramfs() {
   local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
+  hostnamectl | grep Virtualization | grep oracle && _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems vmwgfx)"
   $CH sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $CH mkinitcpio -P
+  sleep 10
 }
 
 # Boot loader - GRUB
 function bootloader_grub() {
   $CH $PM dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
   $CH grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
-  $CH grub-mkconfig -o /boot/grub/grub.cfg  
+  $CH grub-mkconfig -o /boot/grub/grub.cfg
+  $SL
 }
 
 # Boot loader - bootctl
 function bootloader_bootctl() {
 
   if $CH bootctl is-installed > /dev/null
-  then 
+  then
     echo "systemd already installed"
     $CH mkdir -p /boot/loader/entries
-  else 
+  else
     $CH bootctl install
   fi
-  
+
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
   $CH bootctl status
+  $SL
 }
 
 # User configuration
@@ -155,17 +163,17 @@ function user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
   $CH useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
-  
+
   # Add sudoer privileges
   # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/wheel
   # Set user password
   ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $CH passwd ${USERNAME}
-  
+
   $CH $PM xdg-user-dirs xdg-utils
   printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
-  $CH xdg-user-dirs-update  
-  
+  $CH xdg-user-dirs-update
+
   # Set XDG env variables
   echo "" >> /mnt/etc/profile
   echo "# XDG Base Directory specification" >> /mnt/etc/profile
@@ -173,9 +181,10 @@ function user_install() {
   echo "export XDG_CONFIG_HOME=\$HOME/.config" >> /mnt/etc/profile
   echo "export XDG_CACHE_HOME=\$HOME/.cache" >> /mnt/etc/profile
   echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
-  
+
   # Install virtualbox addons (if needed)
   hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
+  $SL
 }
 
 
@@ -185,13 +194,13 @@ function main () {
   system_install
   initramfs
   bootloader_grub
-  user_install  
+  user_install
 }
 
 time main
 cp /var/log/install.log /mnt/var/log
- 
+
 umount -R /mnt/boot
 umount -R /mnt
-sleep 5
+$SL
 reboot
