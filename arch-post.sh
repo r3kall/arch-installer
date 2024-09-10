@@ -3,7 +3,7 @@ set -e
 
 ####
 FULL=true
-DE="gnome"
+DE="qtile"
 ####
 
 ## Commands
@@ -106,6 +106,7 @@ function xserver() {
   $SL
 }
 
+
 function common() {
   core
   aur_helper
@@ -120,7 +121,7 @@ function common() {
 function install_sddm() {
   # Install SDDM display manager
   # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $AUR sddm # qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm-sugar-dark
+  $AUR qt6-base qt6-declarative qt5-base qt5-declarative qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm sddm-sugar-dark
   sudo systemctl enable sddm
   $SL
 }
@@ -132,11 +133,11 @@ function install_qtile() {
     rofi  \
     dunst \
     feh   \
-    alsa-utils \
-    volumeicon \
+    picom \
     lxsession-gtk3 \
     lxappearance-gtk3 \
-    network-manager-applet
+    network-manager-applet \
+    qtile-extras
   $SL
 }
 
@@ -149,6 +150,7 @@ function install_gnome() {
   $AUR matcha-gtk-theme qogir-icon-theme
   $SL
 }
+
 
 function extra() {
   # Extras
@@ -175,6 +177,7 @@ function dotfiles() {
   $SL
 }
 
+
 function main() {
   init
   common
@@ -184,6 +187,11 @@ function main() {
       "gnome")
         echo -n "Installing GNOME desktop environment."
         install_gnome
+        ;;
+      "qtile")
+        echo -n "Installing QTILE desktop environment."
+        install_sddm
+        install_qtile
         ;;
       *)
         echo -n "Invalid variiable name."
@@ -196,6 +204,7 @@ function main() {
   fi
   $SL
 }
+
 
 time main
 $SL
