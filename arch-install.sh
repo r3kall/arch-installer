@@ -34,7 +34,7 @@ function init () {
 
   # Update the system clock
   timedatectl set-ntp true
-  sleep 10
+  sleep 8
 
   # Generates a log file with all commands and outputs during installation
   exec &> >(tee -a "/var/log/install.log")
@@ -63,7 +63,7 @@ function system_install () {
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
   reflector --country Italy,Germany,France -l 10 -p https --save /etc/pacman.d/mirrorlist
-  sleep 10
+  sleep 8
 
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
@@ -126,10 +126,9 @@ function system_install () {
 # Initramfs
 function initramfs() {
   local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
-  hostnamectl | grep Virtualization | grep oracle && _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems vmwgfx)"
   $CH sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $CH mkinitcpio -P
-  sleep 10
+  $SL
 }
 
 # Boot loader - GRUB

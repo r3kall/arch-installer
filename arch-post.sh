@@ -2,6 +2,7 @@
 set -e
 
 ####
+FULL=true
 DE="gnome"
 ####
 
@@ -178,19 +179,21 @@ function main() {
   init
   common
 
-  case $DE in
-    "gnome")
-      echo -n "Installing GNOME desktop environment."
-      install_gnome
-      ;;
-    *)
-      echo -n "Invalid variiable name."
-      exit 1
-      ;;
-  esac
+  if $FULL; then
+    case $DE in
+      "gnome")
+        echo -n "Installing GNOME desktop environment."
+        install_gnome
+        ;;
+      *)
+        echo -n "Invalid variiable name."
+        exit 1
+        ;;
+    esac
 
-  extra
-  dotfiles
+    extra
+    dotfiles
+  fi
   $SL
 }
 
