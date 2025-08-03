@@ -8,7 +8,7 @@ DE="qtile"
 
 ## Commands
 AUR="paru -Sq --needed --noconfirm --color auto"
-SL="sleep 2"
+SL="sleep 3"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
@@ -129,8 +129,54 @@ function install_gnome() {
   $SL
 }
 
+
+function install_hyprpanel() {
+  $AUR \
+    aylurs-gtk-shell-git \
+    wireplumber \
+    libgtop \
+    bluez \
+    bluez-utils \
+    btop \
+    networkmanager \
+    dart-sass \ 
+    wl-clipboard \
+    brightnessctl \
+    swww \
+    upower \
+    power-profiles-daemon \
+    gvfs \
+    gtksourceview3 \
+    libsoup3 \
+    grimblast-git \
+    wf-recorder-git \
+    hyprpicker \
+    matugen-bin \
+    python-gpustat \
+    hyprsunset-git \
+    ags-hyprpanel-git
+}
+
 function install_hyprland() {
+  # Common
+  $AUR qt5-wayland qt6-wayland
+
+  # UWSM
   $AUR uwsm libnewt
+
+  # hyprland
+  $AUR hyprland
+
+  # display manager
+  install_display_manager
+
+  # hyprpanel
+  install_hyprpanel
+
+  $AUR \
+    hyprpaper \
+    xdg-desktop-portal-hyprland
+
   $SL
 }
 
@@ -141,9 +187,9 @@ function extra() {
     bat \
     eza
 
-  # flatpak install flathub com.google.Chrome
-  flatpak install -y --noninteractive flathub com.spotify.Client
-  flatpak install -y --noninteractive flathub com.visualstudio.code
+  #flatpak install flathub com.google.Chrome
+  #flatpak install -y --noninteractive flathub com.spotify.Client
+  #flatpak install -y --noninteractive flathub com.visualstudio.code
   $SL
 }
 
