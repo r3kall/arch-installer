@@ -69,8 +69,7 @@ function aur_helper() {
 
 function terminal() {
   $AUR        \
-    alacritty \
-    vivid     \
+    kitty \
     zsh       \
     starship  \
     zsh-completions \
@@ -85,18 +84,13 @@ function terminal() {
 
 function fonts() {
   $AUR \
+    noto-fonts \
     ttf-dejavu \
     ttf-ubuntu-mono-nerd \
+    ttf-hack \
     ttf-hack-nerd
 
   fc-cache
-  $SL
-}
-
-
-function icons() {
-  $AUR \
-    hicolor-icon-theme
   $SL
 }
 
@@ -112,37 +106,21 @@ function common() {
   aur_helper
   terminal
   fonts
-  icons
-  xserver
   $SL
 }
 
 
-function install_sddm() {
-  # Install SDDM display manager
-  # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $AUR qt6-base qt6-declarative qt5-base qt5-declarative qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm sddm-sugar-dark
-  sudo systemctl enable sddm
-  $SL
-}
-
-
-function install_qtile() {
-  $AUR    \
-    qtile \
-    rofi  \
-    dunst \
-    feh   \
-    picom \
-    lxsession-gtk3 \
-    lxappearance-gtk3 \
-    network-manager-applet \
-    qtile-extras
-  $SL
-}
+# function install_sddm() {
+#   # Install SDDM display manager
+#   # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
+#   $AUR qt6-base qt6-declarative qt5-base qt5-declarative qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm sddm-sugar-dark
+#   sudo systemctl enable sddm
+#   $SL
+# }
 
 
 function install_gnome() {
+  xserver
   $AUR gnome gnome-shell-extensions gnome-tweaks
   sudo systemctl enable gdm.service
 
@@ -151,18 +129,19 @@ function install_gnome() {
   $SL
 }
 
+function install_hyprland() {
+  $AUR uwsm libnewt
+  $SL
+}
+
 
 function extra() {
   # Extras
-  $AUR   \
-    bat  \
-    exa  \
-    fd   \
-    dust \
-    neovim
+  $AUR \
+    bat \
+    eza
 
   # flatpak install flathub com.google.Chrome
-  flatpak install -y --noninteractive flathub com.brave.Browser
   flatpak install -y --noninteractive flathub com.spotify.Client
   flatpak install -y --noninteractive flathub com.visualstudio.code
   $SL
@@ -187,11 +166,14 @@ function main() {
       "gnome")
         echo -n "Installing GNOME desktop environment."
         install_gnome
+        extra
+        dotfiles
         ;;
-      "qtile")
+      "hyprland")
         echo -n "Installing QTILE desktop environment."
-        install_sddm
-        install_qtile
+        install_hyprland
+        extra
+        dotfiles
         ;;
       *)
         echo -n "Invalid variiable name."
