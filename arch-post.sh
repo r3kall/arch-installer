@@ -142,7 +142,7 @@ function install_gnome() {
 function install_hyprpanel() {
   paru -Sq \
     --needed brightnessctl ags-hyprpanel-git \
-    --asdeps btop grimblast-git python-pywal power-profiles-daemon swww wf-recorder mutagen-bin
+    --asdeps btop grimblast-git python-pywal power-profiles-daemon swww wf-recorder matugen-bin
   $SL
 }
 
