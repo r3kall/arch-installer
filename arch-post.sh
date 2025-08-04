@@ -101,14 +101,6 @@ function xserver() {
 }
 
 
-function install_sddm() {
-  # Install SDDM display manager
-  # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-  $AUR qt6-base qt6-declarative qt5-base qt5-declarative qt5-graphicaleffects qt5-quickcontrols2 qt5-svg sddm sddm-sugar-dark
-  sudo systemctl enable sddm.service
-  $SL
-}
-
 function install_display_manager() {
   local DM=$1
 
@@ -148,30 +140,10 @@ function install_gnome() {
 
 
 function install_hyprpanel() {
-  $AUR \
-    aylurs-gtk-shell-git \
-    wireplumber \
-    libgtop \
-    bluez \
-    bluez-utils \
-    btop \
-    networkmanager \
-    dart-sass \ 
-    wl-clipboard \
-    brightnessctl \
-    swww \
-    upower \
-    power-profiles-daemon \
-    gvfs \
-    gtksourceview3 \
-    libsoup3 \
-    grimblast-git \
-    wf-recorder-git \
-    hyprpicker \
-    matugen-bin \
-    python-gpustat \
-    hyprsunset-git \
-    ags-hyprpanel-git
+  paru -Sq \
+    --needed brightnessctl ags-hyprpanel-git \
+    --asdeps btop grimblast-git python-pywal power-profiles-daemon swww wf-recorder mutagen-bin
+  $SL
 }
 
 function install_hyprland() {
@@ -210,7 +182,7 @@ function install_hyprland() {
   install_display_manager "ly"
 
   # hyprpanel
-  # install_hyprpanel
+  install_hyprpanel
 
   $SL
 }
