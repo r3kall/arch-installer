@@ -62,8 +62,8 @@ function system_install () {
 
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector --country Italy,Germany,France -l 10 -p https --save /etc/pacman.d/mirrorlist
-  sleep 8
+  reflector --country Italy,Germany,France -l 20 -p https --save /etc/pacman.d/mirrorlist
+  sleep 10
 
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
@@ -107,7 +107,7 @@ function system_install () {
   ## System upgrade
   $CH $PM archlinux-keyring
   $CH pacman -Syyuq --noconfirm
-  $CH $PM linux-tools pacman-contrib man-db man-pages texinfo bash-completion dialog nano neovim htop git parted reflector
+  $CH $PM linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
 
   # Install microcodes (if possible)
   !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $CH $PM intel-ucode
@@ -117,9 +117,6 @@ function system_install () {
   $CH $PM networkmanager
   $CH systemctl enable NetworkManager.service
 
-  # Install bluetooth (if possible)
-  # NOTE: lsmod give errors ... post-installation
-  # $ch lsmod | grep blue &>/dev/null && $ch $pm bluez bluez-utils && $ch systemctl enable bluetooth.service
   $SL
 }
 
@@ -151,6 +148,7 @@ function bootloader_bootctl() {
   fi
 
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
+  # Change ucode if needed
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
   $CH bootctl status

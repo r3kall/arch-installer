@@ -1,14 +1,10 @@
 #!/bin/bash
 set -e
 
-####
-FULL=true
-DE="hyprland"
-####
 
 ## Commands
 AUR="paru -Sq --needed --noconfirm --color auto"
-SL="sleep 3"
+SL="sleep 2"
 
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
@@ -23,7 +19,6 @@ function init () {
 
   exec &> >(sudo tee -a "/var/log/post.log")
   set -x
-
   $SL
 }
 
@@ -37,6 +32,10 @@ function core() {
     rustup  \
     go      \
     flatpak \
+    bat     \
+    eza     \
+    fd      \
+    fzf
 
   rustup default stable
 
@@ -67,17 +66,14 @@ function aur_helper() {
 }
 
 
-function terminal() {
-  $AUR        \
-    kitty \
-    zsh       \
-    starship  \
-    zsh-completions \
-    zsh-autosuggestions \
-    zsh-syntax-highlighting \
-    zsh-history-substring-search
-
-  sudo chsh -s /bin/zsh
+function wayland() {
+  $AUR      \
+    wayland \
+    gtk4    \
+    qt5-base qt5-declarative qt5-wayland \
+    qt6-base qt6-declarative qt6-wayland \
+    uwsm libnewt \
+    xorg-xwayland
   $SL
 }
 
@@ -95,22 +91,35 @@ function fonts() {
 }
 
 
-function xserver() {
-  $AUR xorg xorg-xinit xterm
+function terminal() {
+  $AUR        \
+    kitty     \
+    foot      \
+    zsh       \
+    starship  \
+    zsh-completions \
+    zsh-autosuggestions \
+    zsh-syntax-highlighting \
+    zsh-history-substring-search
+
+  sudo chsh -s $(which zsh)
   $SL
 }
 
 
-function install_display_manager() {
+function display_manager() {
   local DM=$1
 
   case $DM in
     "sddm")
       echo -n "Installing SDDM ..."
       # Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-      $AUR qt6-base qt6-declarative qt5-base qt5-declarative \
-        qt5-graphicaleffects qt5-quickcontrols2 qt5-svg \
-        sddm sddm-sugar-dark
+      $AUR \
+        qt5-graphicaleffects \
+        qt5-quickcontrols2 \
+        qt5-svg \
+        sddm \
+        sddm-sugar-dark
       sudo systemctl enable sddm.service
       ;;
     "ly")
@@ -128,30 +137,49 @@ function install_display_manager() {
 }
 
 
-function install_gnome() {
-  xserver
-  $AUR gnome gnome-shell-extensions gnome-tweaks
-  sudo systemctl enable gdm.service
+function utils() {
+  $AUR blueman bluez
+  $AUR \
+    pipewire pipewire-pulse pipewire-alsa pipewire-jack \
+    pavucontrol pulsemixer \
+    wireplumber
+  $AUR ffmpeg gstreamer gst-libav gst-plugin-pipewire
+  $AUR vlc vlc-plugin-all
 
-  # themes
-  $AUR matcha-gtk-theme qogir-icon-theme
+  # Install notification daemon
+  # Swaync behave also as side panel
+  $AUR libnotify gvfs swaync
+  
+  # Install pywal-like and swww
+  $AUR hellwal swww
+
+  # Install wofi and deps
+  $AUR wl-clipboard wofi wofi-emoji
+  
+  # Install neovim and lsps
+  $AUR neovim bash-language-server
+
+  # Install pdf reader
+  $AUR sqlite file zathura
+
+  # Install file managers
+  $AUR ffmpeg 7zip jq yq fd ripgrep fzf zoxide resvg imagemagick wl-clipboard yazi
+  $SL
+
+  systemctl --user enable pipewire.service
+  systemctl --user enable pipewire-pulse.service
+  systemctl enable bluetooth
   $SL
 }
 
-
-function install_hyprpanel() {
-  paru -Sq \
-    --needed brightnessctl ags-hyprpanel-git \
-    --asdeps btop grimblast-git python-pywal power-profiles-daemon swww wf-recorder matugen-bin
-  $SL
-}
+# function install_hyprpanel() {
+#   paru -Sq \
+#     --needed brightnessctl ags-hyprpanel-git \
+#     --asdeps btop grimblast-git python-pywal power-profiles-daemon swww wf-recorder matugen-bin
+#   $SL
+# }
 
 function install_hyprland() {
-  # Common
-  $AUR wayland gtk4 qt5-base qt5-declarative qt5-wayland qt6-base qt6-declarative qt6-wayland
-
-  # UWSM
-  $AUR uwsm libnewt
 
   # Install Hyprland Libraries
   $AUR \
@@ -166,33 +194,23 @@ function install_hyprland() {
 
   # Install Hyprland Utils
   $AUR \
-    hyprpaper \
-    hyprpicker \
     hypridle \
     hyprlock \
+    hyprpicker \
     hyprsunset \
     xdg-desktop-portal-hyprland \
+    xdg-desktop-portal-gtk \
     hyprsysteminfo \
     hyprpolkitagent
 
   # hyprland
-  $AUR hyprland
-
-  # display manager
-  install_display_manager "ly"
-
-  # hyprpanel
-  install_hyprpanel
+  $AUR hyprland waybar
 
   $SL
 }
 
-
 function extra() {
   # Extras
-  $AUR \
-    bat \
-    eza
 
   #flatpak install flathub com.google.Chrome
   #flatpak install -y --noninteractive flathub com.spotify.Client
@@ -214,40 +232,16 @@ function main() {
   init
   core
   aur_helper
+  wayland
   fonts
   terminal
-  $SL
-
-  # if $FULL; then
-  #   case $DE in
-  #     "gnome")
-  #       echo -n "Installing GNOME desktop environment."
-  #       install_gnome
-  #       extra
-  #       dotfiles
-  #       ;;
-  #     "hyprland")
-  #       echo -n "Installing QTILE desktop environment."
-  #       install_hyprland
-  #       extra
-  #       dotfiles
-  #       ;;
-  #     *)
-  #       echo -n "Invalid variiable name."
-  #       exit 1
-  #       ;;
-  #   esac
-
-  #   dotfiles
-  # fi
-
+  utils
   install_hyprland
-
+  display_manager "ly"
+  dotfiles
   $SL
 }
 
 
 time main
-$SL
 sudo reboot
-
