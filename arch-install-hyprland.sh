@@ -1,11 +1,8 @@
 #!/bin/bash
 set -e
 
-
-## Commands
-AUR="paru -Sq --needed --noconfirm --color auto"
+AUR="paru -Sq --needed --noconfirm"
 SL="sleep 2"
-
 
 function die() { local _message="${*}"; echo "${_message}"; exit 1; }
 
@@ -31,6 +28,7 @@ function core() {
     python  \
     rustup  \
     go      \
+    nvm     \
     flatpak \
     bat     \
     eza     \
@@ -58,7 +56,7 @@ function aur_helper() {
   local aur_home="/home/$USER/$aur_helper"
   if ! hash $aur_helper; then
     [ ! -d $aur_home ] && git -C /home/$USER clone https://aur.archlinux.org/paru.git
-    (cd $aur_home && makepkg -si --needed --noconfirm)
+    (cd $aur_home && makepkg -mcsi --needed --noconfirm --noprogressbar)
     sudo sed -i 's/#BottomUp/BottomUp/' /etc/paru.conf
     rm -Rf ${aur_home}
   fi
@@ -97,12 +95,14 @@ function terminal() {
     foot      \
     zsh       \
     starship  \
+    fastfetch \
     zsh-completions \
     zsh-autosuggestions \
     zsh-syntax-highlighting \
     zsh-history-substring-search
 
-  sudo chsh -s $(which zsh)
+  chsh -s $(which zsh)
+  mkdir -p "$XDG_CACHE_HOME/zsh"
   $SL
 }
 
@@ -144,7 +144,7 @@ function utils() {
     pavucontrol pulsemixer \
     wireplumber
   $AUR ffmpeg gstreamer gst-libav gst-plugin-pipewire
-  $AUR vlc vlc-plugin-all
+  $AUR vlc vlc-plugins-all
 
   # Install notification daemon
   # Swaync behave also as side panel
@@ -172,12 +172,6 @@ function utils() {
   $SL
 }
 
-# function install_hyprpanel() {
-#   paru -Sq \
-#     --needed brightnessctl ags-hyprpanel-git \
-#     --asdeps btop grimblast-git python-pywal power-profiles-daemon swww wf-recorder matugen-bin
-#   $SL
-# }
 
 function install_hyprland() {
 
@@ -199,15 +193,16 @@ function install_hyprland() {
     hyprpicker \
     hyprsunset \
     xdg-desktop-portal-hyprland \
-    xdg-desktop-portal-gtk \
-    hyprsysteminfo \
     hyprpolkitagent
 
   # hyprland
-  $AUR hyprland waybar
+  $AUR hyprland
+  $SL
+}
 
+function waybar() {
+  $AUR waybar
   systemctl --user enable waybar.service
-
   $SL
 }
 
@@ -239,11 +234,11 @@ function main() {
   terminal
   utils
   install_hyprland
+  waybar
   display_manager "ly"
   dotfiles
   $SL
 }
-
 
 time main
 sudo reboot
