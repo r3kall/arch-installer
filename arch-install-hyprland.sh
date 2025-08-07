@@ -206,6 +206,8 @@ function install_hyprland() {
   # hyprland
   $AUR hyprland waybar
 
+  systemctl --user enable waybar.service
+
   $SL
 }
 
