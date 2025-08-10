@@ -1,64 +1,44 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+
 # Note: Arch Linux installation images do not support Secure Boot.
 # You will need to disable Secure Boot to boot the installation medium.
 # If desired, Secure Boot can be set up after completing the installation.
 
 
-#### Variables
-USERNAME="arch"
-HOSTNAME="linux"
-
-ROOT_PASSWORD="root"
-USER_PASSWORD="admin"
-
-TIMEZONE="Europe/Rome"
-LOCALE="en_US.UTF-8 UTF-8"
-KEYMAP="it"
+# ===== User variables =====
+USERNAME="${USERNAME:-arch}"
+HOSTNAME="${HOSTNAME:-linux}"
+ROOT_PASSWORD="${ROOT_PASSWORD:-root}"
+USER_PASSWORD="${USER_PASSWORD:-admin}"
+TIMEZONE="${TIMEZONE:-Europe/Rome}"
+LOCALE="${LOCALE:-en_US.UTF-8 UTF-8}"
+KEYMAP="${KEYMAP:-it}"
+SWAP_SIZE_GB="${SWAP_SIZE_GB:-0}"  # set >0 to create a swapfile of that size
 
 #### Commands
-PM="pacman -Sq --needed --noconfirm"
+PM="pacman -S --needed --noconfirm"
 CH="arch-chroot /mnt"
 SL="sleep 2"
 
+die(){ echo "ERROR: $*" >&2; exit 1; }
 
-function die() { local _message="${*}"; echo "${_message}"; exit; }
-
-
-function init () {
-  if ping -c 1 -W 5 google.com &> /dev/null; then
-    echo "Arch Installer starting."
-  else
-    die "Arch Installer stopping: no connection."
-  fi
-
-  # Update the system clock
+init() {
+  ping -c 1 -W 5 archlinux.org &>/dev/null || die "No network. Connect before running."
   timedatectl set-ntp true
-  sleep 8
-
-  # Generates a log file with all commands and outputs during installation
+  # Log everything
   exec &> >(tee -a "/var/log/install.log")
   set -x
+}
+
+partitioning () {
+  [[ -x ./arch-parted.sh ]] || die "arch-parted.sh missing."
+  ./arch-parted.sh
   $SL
 }
 
-function partitioning () {
-  read -p 'Continue with Disk Partitioning? [y/N]: ' fsok
-  if ! [ $fsok = 'y' ] && ! [ $fsok = 'Y' ]; then
-    die "Edit the script to continue. Exiting."
-  else
-    if [[ $(ls /sys/firmware/efi/efivars) ]]; then
-      echo "Formatting partitions with parted."
-      /bin/bash arch-parted.sh
-    else
-      die "Not EFI system. Exiting."
-    fi
-  fi
-  $SL
-}
-
-function system_install () {
-  echo "Starting system installation."
+system_install () {
+  echo "== System Installation =="
 
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
@@ -67,7 +47,7 @@ function system_install () {
 
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  pacstrap /mnt base base-devel linux-lts
+  pacstrap /mnt base base-devel linux-lts linux-lts-headers
   !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
 
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
@@ -95,7 +75,6 @@ function system_install () {
 
   # Create the hostname file
   echo $HOSTNAME > /mnt/etc/hostname
-
   # Add matching entries to hosts
   echo "# The following lines are desirable for IPv4 capable hosts" >> /mnt/etc/hosts
   echo "127.0.0.1         localhost" >> /mnt/etc/hosts
@@ -104,9 +83,8 @@ function system_install () {
   echo "ff02::1           ip6-allnodes" >> /mnt/etc/hosts
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
 
-  ## System upgrade
+  ## Install tools
   $CH $PM archlinux-keyring
-  $CH pacman -Syyuq --noconfirm
   $CH $PM linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
 
   # Install microcodes (if possible)
@@ -116,12 +94,32 @@ function system_install () {
   # Install NetworkManager
   $CH $PM networkmanager
   $CH systemctl enable NetworkManager.service
+  
+  # GPU drivers
+  if lspci | grep -E "VGA|3D|Display" | grep -qi nvidia; then
+    $CH $PM nvidia-lts nvidia-utils
+  elif lspci | grep -E "VGA|3D|Display" | grep -qi intel; then
+    $CH $PM mesa vulkan-intel intel-media-driver
+  elif lspci | grep -E "VGA|3D|Display" | grep -qi amd; then
+    $CH $PM mesa vulkan-radeon libva-mesa-driver
+  else
+    $CH $PM mesa
+  fi
+
+  # Optional Swapfile
+  if [[ "$SWAP_SIZE_GB" != "0" ]]; then
+    $CH fallocate -l "${SWAP_SIZE_GB}G" /swapfile
+    $CH chmod 600 /swapfile
+    $CH mkswap /swapfile
+    $CH swapon /swapfile
+    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
+  fi
 
   $SL
 }
 
 # Initramfs
-function initramfs() {
+initramfs() {
   local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
   $CH sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
   $CH mkinitcpio -P
@@ -129,7 +127,7 @@ function initramfs() {
 }
 
 # Boot loader - GRUB
-function bootloader_grub() {
+bootloader_grub() {
   $CH $PM dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
   $CH grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
   $CH grub-mkconfig -o /boot/grub/grub.cfg
@@ -137,7 +135,7 @@ function bootloader_grub() {
 }
 
 # Boot loader - bootctl
-function bootloader_bootctl() {
+bootloader_bootctl() {
 
   if $CH bootctl is-installed > /dev/null
   then
@@ -156,7 +154,7 @@ function bootloader_bootctl() {
 }
 
 # User configuration
-function user_install() {
+user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
   $CH useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
@@ -184,14 +182,16 @@ function user_install() {
   $SL
 }
 
-
-function main () {
+main () {
   init
   partitioning
   system_install
   initramfs
   bootloader_grub
   user_install
+  
+  # System update
+  $CH pacman -Syyuq --noconfirm
 }
 
 time main
@@ -199,5 +199,4 @@ cp /var/log/install.log /mnt/var/log
 
 umount -R /mnt/boot
 umount -R /mnt
-$SL
-reboot
+echo "Installation complete. You can now reboot."
