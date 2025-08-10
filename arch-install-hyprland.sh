@@ -102,7 +102,7 @@ terminal() {
 }
 
 display_manager() {
-  local DM=$1
+  local DM=$DISPLAY_MANAGER
 
   case $DM in
     "sddm")
@@ -173,11 +173,11 @@ install_hyprland() {
   $AUR hyprland
 }
 
-function waybar() {
+waybar() {
   $AUR waybar
 }
 
-function extra() {
+extra() {
   if [[ "$ENABLE_QEMU_GUEST" -eq 1 ]]; then
 	$AUR qemu-guest-agent
 	sudo systemctl enable qemu-guest-agent.service
@@ -198,7 +198,7 @@ function extra() {
 }
 
 
-function dotfiles() {
+dotfiles() {
   git clone --bare https://github.com/r3kall/dotfiles $HOME/.dotfiles
   local config="/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME"
   $config checkout
@@ -216,8 +216,10 @@ function main() {
   utils
   install_hyprland
   waybar
-  display_manager "ly"
+  display_manager
+  extra
   dotfiles
 }
 
 time main "$@"
+echo "Post Install Complete ! you can reboot."

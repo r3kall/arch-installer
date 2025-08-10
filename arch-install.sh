@@ -178,7 +178,7 @@ user_install() {
   echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
 
   # Install virtualbox addons (if needed)
-  hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
+  # hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
   $SL
 }
 
