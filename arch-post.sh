@@ -70,7 +70,7 @@ install_aur_packages() {
     run_as_user '
       export CARGO_HOME="$XDG_DATA_HOME/cargo"
       export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
-	  '$AUR_HELPER' -Syu '$AUR_ARGS' $(cat '$AUR_LIST' | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
+	  '$AUR_HELPER' '$AUR_ARGS' -S - < $(cat '$AUR_LIST' | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
 	'
 	rm -f /etc/sudoers.d/99-paru-pacman
   else
