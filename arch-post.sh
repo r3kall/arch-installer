@@ -67,7 +67,7 @@ install_aur_packages() {
 echo "[i] Test Internet Connection and Mirrolist. It may take few seconds..."
 ping -c 1 -W 5 google.com >/dev/null
 if ! command -v reflector >/dev/null 2>&1; then pac reflector; fi
-reflector -c Italy,Switzerland,Germany,France -p https -l 16 --sort rate \
+reflector -c Italy,Switzerland,Germany,France -p https -l 10 \
 	--save /etc/pacman.d/mirrorlist || true
 echo "[i] Full System Upgrade"
 pacman -Syyuq --noconfirm
@@ -104,12 +104,12 @@ fi
 # -------- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER}..."
-  
+  sed -i 's/^#\?MAKEFLAGS=.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
+  sed -i 's/^#\?LTO.*/LTO="0"/' /etc/makepkg.conf
+
   run_as_user "
 	set -euo pipefail
-	TMPDIR=\"\${TMPDIR:-/var/tmp}\"
-
-	# --- mktemp + trap per cleanup garantito
+	TMPDIR=\"\${TMPDIR:-/var/tmp/makepkg}\"
     tmp=\"\$(mktemp -d -p \$TMPDIR paru.XXXXXX)\"
 
     cleanup() {
@@ -118,18 +118,13 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 
     trap cleanup EXIT INT TERM
 
-	export MAKEFLAGS=\"\${MAKEFLAGS:--j\$(nproc)}\"
-    export CFLAGS=\"\${CFLAGS:--O2 -pipe}\"
-    export CXXFLAGS=\"\${CXXFLAGS:--O2 -pipe}\"
-
-	cd \"\$tmp\"
+	cd \$tmp
 	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
 	cd $AUR_HELPER
-	# makepkg -si --noconfirm
-	nice -n 10 ionice -c3 makepkg -si --noconfirm --needed
+	nice -n 0 ionice -c2 -n0 makepkg -sri --noconfirm --needed -c --nocheck
   "
 
-  # sed -i 's/#BottomUp/BottomUp/' /etc/$AUR_HELPER.conf
+  sed -i 's/#BottomUp/BottomUp/' /etc/$AUR_HELPER.conf
 else
   echo "[i] ${AUR_HELPER} already present."
 fi
