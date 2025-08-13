@@ -67,11 +67,11 @@ install_aur_packages() {
 	echo "$TARGET_USER ALL=(ALL) NOPASSWD: /usr/bin/pacman" | tee /etc/sudoers.d/99-paru-pacman
 	chmod 440 /etc/sudoers.d/99-paru-pacman
 
-    run_as_user '
-      export CARGO_HOME="$XDG_DATA_HOME/cargo"
-      export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
-	  '$AUR_HELPER' '$AUR_ARGS' -S - < $(cat '$AUR_LIST' | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
-	'
+    run_as_user "
+      export CARGO_HOME=\"\$XDG_DATA_HOME/cargo\"
+      export RUSTUP_HOME=\"\$XDG_DATA_HOME/rustup\"
+	  $AUR_HELPER $AUR_ARGS -S \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
+	"
 	rm -f /etc/sudoers.d/99-paru-pacman
   else
 	echo "[i] No AUR_LIST provided or file not found."
