@@ -109,7 +109,7 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 
   run_as_user "
 	set -euo pipefail
-	TMPDIR=\"\${TMPDIR:-/var/tmp/makepkg}\"
+	TMPDIR=\"\${TMPDIR:-/var/tmp}\"
     tmp=\"\$(mktemp -d -p \$TMPDIR paru.XXXXXX)\"
 
     cleanup() {
