@@ -39,7 +39,7 @@ DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
 ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0	
 ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
 AUR_HELPER="${AUR_HELPER:-paru}"				# paru|yay
-AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview --noedit}"	# extra args
+AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview}"	# extra args
 
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/r3kall/dotfiles}"
 DOTFILES_DIR="${DOTFILES_DIR:-$TARGET_HOME/.dotfiles}"     # bare repo dir
