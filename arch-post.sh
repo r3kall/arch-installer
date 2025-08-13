@@ -64,7 +64,7 @@ install_aur_packages() {
   if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
 	echo "[i] Installing AUR packages from $AUR_LIST ..."
 
-	echo "$TARGET_USER ALL=(ALL) NOPASSWD: /usr/bin/pacman" | tee /etc/sudoers.d/99-paru-pacman
+	echo "$TARGET_USER ALL=(ALL) NOPASSWD: /usr/bin/pacman,pacman,paru" | tee /etc/sudoers.d/99-paru-pacman
 	chmod 440 /etc/sudoers.d/99-paru-pacman
 
     run_as_user "
