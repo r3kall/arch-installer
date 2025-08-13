@@ -15,7 +15,7 @@ echo "[i] Script dir: $DIR"
 # Log
 LOG="${LOG:-/var/log/arch-post.log}"
 exec > >(tee -a "$LOG") 2>&1
-set -x
+# set -x
 
 if (( EUID != 0 )); then
   echo "[!] Re-exec with sudo please"
@@ -92,9 +92,6 @@ run_as_user '
   rustup default stable
 '
 
-run_as_user 'env | grep HOME'
-exit 1
-
 if ! command -v docker >/dev/null 2>&1; then
   # Install Docker
   pac docker
@@ -160,6 +157,7 @@ fi
 
 case "$WINDOW_MANAGER" in
   "hyprland")
+	echo "[i] Install Hyprland ..."
 	AUR_LIST="$DIR/hyprland-packages.txt" install_aur_packages
 	;;
   "none")
