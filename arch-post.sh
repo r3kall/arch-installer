@@ -23,7 +23,13 @@ if (( EUID != 0 )); then
   exit 1
 fi
 
-trap 'echo "[!] Error on line ${LINENO}. See $LOG"; exit 1' ERR
+cleanup() {
+  [ -f /etc/sudoers.d/99-paru-pacman ] && rm -f /etc/sudoers.d/99-paru-pacman
+  echo "[!] Error on line ${LINENO}. See $LOG"
+  exit 1
+}
+
+trap cleanup ERR
 
 # Target User
 TARGET_USER="${TARGET_USER:-${SUDO_USER:-}}"
@@ -32,6 +38,7 @@ if [[ -z "${TARGET_USER}" || "${TARGET_USER}" == "root" ]]; then
 fi
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 : "${TARGET_HOME:?User home not found}"
+TARGET_USER_PKGDEST="$TARGET_HOME/.cache/aurpkg"
 
 # Profiles
 WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|all|none
@@ -39,7 +46,7 @@ DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
 ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0	
 ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
 AUR_HELPER="${AUR_HELPER:-paru}"				# paru|yay
-AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview}"	# extra args
+AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview}" # extra args
 
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/r3kall/dotfiles}"
 DOTFILES_DIR="${DOTFILES_DIR:-$TARGET_HOME/.dotfiles}"     # bare repo dir
@@ -56,7 +63,17 @@ run_as_user()	 { sudo -u "$TARGET_USER" -H bash -lc "$*"; }
 install_aur_packages() {
   if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
 	echo "[i] Installing AUR packages from $AUR_LIST ..."
-    run_as_user "$AUR_HELPER $AUR_ARGS -S \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')"
+
+	echo "$TARGET_USER ALL=(ALL) NOPASSWD: /usr/bin/pacman" | tee /etc/sudoers.d/99-paru-pacman
+	chmod 440 /etc/sudoers.d/99-paru-pacman
+
+    run_as_user '
+	  set -euo pipefail
+	  mapfile -t PKGS < <(cat "'"$AUR_LIST"'" | grep -vE "^\s*#" | sed "/^\s*$/d")
+	  [[ ${#PKGS[@]} -eq 0 ]] && exit 0
+	  '$AUR_HELPER' -S "${PKGS[@]}" --needed --noconfirm --skipreview --mflags "--nocheck" -c
+	'
+	rm -f /etc/sudoers.d/99-paru-pacman
   else
 	echo "[i] No AUR_LIST provided or file not found."
 	exit 1
@@ -113,22 +130,28 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   # sed -i 's/^#\?LTO.*/LTO="0"/' /etc/makepkg.conf
   sed -i 's/^#\?BUILDENV=.*/BUILDENV=(!distcc color ccache check !sign)/' /etc/makepkg.conf
   
-  run_as_user "
+  run_as_user '
 	set -euo pipefail
-	TMPDIR=\"\${TMPDIR:-/var/tmp}\"
-    tmp=\"\$(mktemp -d -p \$TMPDIR paru.XXXXXX)\"
+	TMPDIR="${TMPDIR:-/var/tmp}"
+	AUR_HELPER="'"$AUR_HELPER"'"
+    PKGDEST="'"$USER_PKGDEST"'"
+	mkdir -p "$PKGDEST" || true
+
+	tmp="$(mktemp -d -p $TMPDIR paru.XXXXXX)"
 
     cleanup() {
-      [[ -n \"\${tmp:-}\" && -d \"\$tmp\" ]] && rm -rf -- \"\$tmp\"
+      [[ -n "${tmp:-}" && -d "$tmp" ]] && rm -rf -- "$tmp"
     }
 
     trap cleanup EXIT INT TERM
 
-	cd \$tmp
+	cd "$tmp"
 	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
-	cd $AUR_HELPER
-	nice -n 0 ionice -c2 -n0 makepkg -sri --noconfirm --needed -c --nocheck
-  "
+	cd "$AUR_HELPER"
+	nice -n 0 ionice -c2 -n0 makepkg -sr --noconfirm --needed --nocheck -c
+  '
+  pacman -U --noconfirm --needed "$USER_PKGDEST"/paru-*.pkg.tar.zst
+
   sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
   # sed -i -e 's/^#CombinedUpgrade/CombinedUpgrade/' -e 's/^#NewsOnUpgrade/NewsOnUpgrade/' "/etc/$AUR_HELPER.conf"
 else
