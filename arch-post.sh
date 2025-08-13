@@ -5,16 +5,21 @@ set -euo pipefail
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 umask 027
 
+echo "==== Post Install Script ===="
+
 # Script Directory
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+echo "[i] Script dir: $DIR"
 
 # Log
 LOG="${LOG:-/var/log/arch-post.log}"
 exec > >(tee -a "$LOG") 2>&1
+set -x
 
 if (( EUID != 0 )); then
-  echo "[i] Re-exec with sudo..."
-  exec sudo -H bash "$0" "$@"
+  echo "[!] Re-exec with sudo please"
+  # exec sudo -H bash "$0" "$@"
+  exit 1
 fi
 
 trap 'echo "[!] Error on line ${LINENO}. See $LOG"; exit 1' ERR
@@ -58,13 +63,16 @@ install_aur_packages() {
 }
 
 # -------- Mirrors quick tune --------
+echo "[i] Test Internet Connection and Mirrolist. It may take few seconds..."
 ping -c 1 -W 5 google.com >/dev/null
 if ! command -v reflector >/dev/null 2>&1; then pac reflector; fi
 reflector -c Italy,Switzerland,Germany,France -p https -l 16 --sort rate \
 	--save /etc/pacman.d/mirrorlist || true
+echo "[i] Full System Upgrade"
 pacman -Syyuq --noconfirm
 
 # -------- Core Packages --------
+echo "[i] Install Core Packages"
 pac		\
   gcc     \
   python  \
@@ -98,7 +106,6 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   run_as_user "
 	set -euo pipefail
 	tmpdir=\$(mktemp -d)
-	sudo pacman --noconfirm --needed -S git base-devel
 	cd \$tmpdir
 	git clone https://aur.archlinux.org/$AUR_HELPER.git
 	cd $AUR_HELPER
