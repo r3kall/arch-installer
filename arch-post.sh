@@ -97,9 +97,9 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER}..."
   run_as_user "
 	set -euo pipefail
-	tmp=$(mktemp -d)
+	tmpdir=\$(mktemp -d)
 	sudo pacman --noconfirm --needed -S git base-devel
-	cd $tmp
+	cd \$tmpdir
 	git clone https://aur.archlinux.org/$AUR_HELPER.git
 	cd $AUR_HELPER
 	makepkg -si --noconfirm
