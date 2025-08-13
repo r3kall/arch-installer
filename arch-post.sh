@@ -134,7 +134,7 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	set -euo pipefail
 	TMPDIR="${TMPDIR:-/var/tmp}"
 	AUR_HELPER="'"$AUR_HELPER"'"
-    PKGDEST="'"$USER_PKGDEST"'"
+    PKGDEST="'"$TARGET_USER_PKGDEST"'"
 	mkdir -p "$PKGDEST" || true
 
 	tmp="$(mktemp -d -p $TMPDIR paru.XXXXXX)"
@@ -150,7 +150,7 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	cd "$AUR_HELPER"
 	nice -n 0 ionice -c2 -n0 makepkg -sr --noconfirm --needed --nocheck -c
   '
-  pacman -U --noconfirm --needed "$USER_PKGDEST"/paru-*.pkg.tar.zst
+  pacman -U --noconfirm --needed "$TARGET_USER_PKGDEST"/paru-*.pkg.tar.zst
 
   sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
   # sed -i -e 's/^#CombinedUpgrade/CombinedUpgrade/' -e 's/^#NewsOnUpgrade/NewsOnUpgrade/' "/etc/$AUR_HELPER.conf"
