@@ -144,16 +144,10 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	mkdir -p "$PKGDEST" || true
     tmp="$(mktemp -d -p $TMPDIR paru.XXXXXX)"
 
-    cleanup() {
-      [[ -n "${tmp:-}" && -d "$tmp" ]] && rm -rf -- "$tmp"
-    }
-
-    trap cleanup EXIT INT TERM
-
 	cd "$tmp"
 	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
 	cd "$AUR_HELPER"
-	nice -n 0 ionice -c2 -n0 makepkg -sr --noconfirm --needed --nocheck -c
+	PKGDEST="$PKGDEST" makepkg -s --noconfirm --needed --nocheck
   '
   pacman -U --noconfirm --needed "$TARGET_USER_PKGDEST"/paru-*.pkg.tar.zst
 
