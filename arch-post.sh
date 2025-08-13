@@ -15,7 +15,7 @@ echo "[i] Script dir: $DIR"
 # Log
 LOG="${LOG:-/var/log/arch-post.log}"
 exec > >(tee -a "$LOG") 2>&1
-# set -x
+set -x
 
 if (( EUID != 0 )); then
   echo "[!] Re-exec with sudo please"
@@ -140,14 +140,15 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	TMPDIR="${TMPDIR:-/var/tmp}"
 	AUR_HELPER="'"$AUR_HELPER"'"
     PKGDEST="'"$TARGET_USER_PKGDEST"'"
+	echo $PKGDEST
 	
-	mkdir -p "$PKGDEST" || true
+	mkdir -p $PKGDEST || true
     tmp="$(mktemp -d -p $TMPDIR paru.XXXXXX)"
 
 	cd "$tmp"
 	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
 	cd "$AUR_HELPER"
-	PKGDEST="$PKGDEST" makepkg -s --noconfirm --needed --nocheck
+	PKGDEST="$PKGDEST" makepkg -s
   '
   pacman -U --noconfirm --needed "$TARGET_USER_PKGDEST"/paru-*.pkg.tar.zst
 
