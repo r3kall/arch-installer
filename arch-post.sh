@@ -137,7 +137,7 @@ fi
 
 # -------- Install Commons --------
 AUR_LIST="$DIR/aur-packages.txt" install_aur_packages
-chsh -s "$(command -v zsh)" "$TARGET_USER" || true
+chsh -s "$(run_as_user 'command -v zsh')" "$TARGET_USER" || true
 run_as_user '
   fc-cache -f
   mkdir -p "$XDG_CACHE_HOME/zsh" || true
@@ -209,6 +209,6 @@ bootstrap_dotfiles() {
     echo "[✓] Dotfiles deployed. Backup (if any): $BACKUP_DIR"
   '
 }
-bootstrap_dotfile
+bootstrap_dotfiles
 
 echo "Post Install Complete ! you can reboot."
