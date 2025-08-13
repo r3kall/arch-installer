@@ -39,7 +39,7 @@ DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
 ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0	
 ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
 AUR_HELPER="${AUR_HELPER:-paru}"				# paru|yay
-AUR_ARGS="${AUR_ARGS:---noconfirm --needed}"	# extra args
+AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview --noedit}"	# extra args
 
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/r3kall/dotfiles}"
 DOTFILES_DIR="${DOTFILES_DIR:-$TARGET_HOME/.dotfiles}"     # bare repo dir
@@ -56,7 +56,7 @@ run_as_user()	 { sudo -u "$TARGET_USER" -H bash -lc "$*"; }
 install_aur_packages() {
   if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
 	echo "[i] Installing AUR packages from $AUR_LIST ..."
-    run_as_user "$AUR_HELPER -Syu $AUR_ARGS \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')"
+    run_as_user "$AUR_HELPER $AUR_ARGS -S \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')"
   else
 	echo "[i] No AUR_LIST provided or file not found."
 	exit 1
@@ -86,7 +86,11 @@ pac		\
   fd      \
   fzf
 
-run_as_user 'rustup default stable'
+run_as_user '
+  export CARGO_HOME="$XDG_DATA_HOME/cargo"
+  export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
+  rustup default stable
+'
 
 if ! command -v docker >/dev/null 2>&1; then
   # Install Docker
@@ -104,9 +108,11 @@ fi
 # -------- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER}..."
+  pac ccache
   sed -i 's/^#\?MAKEFLAGS=.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
-  sed -i 's/^#\?LTO.*/LTO="0"/' /etc/makepkg.conf
-
+  # sed -i 's/^#\?LTO.*/LTO="0"/' /etc/makepkg.conf
+  sed -i 's/^#\?BUILDENV=.*/BUILDENV=(!distcc color ccache check !sign)/' /etc/makepkg.conf
+  
   run_as_user "
 	set -euo pipefail
 	TMPDIR=\"\${TMPDIR:-/var/tmp}\"
@@ -123,18 +129,18 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	cd $AUR_HELPER
 	nice -n 0 ionice -c2 -n0 makepkg -sri --noconfirm --needed -c --nocheck
   "
-
-  sed -i 's/#BottomUp/BottomUp/' /etc/$AUR_HELPER.conf
+  sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
+  # sed -i -e 's/^#CombinedUpgrade/CombinedUpgrade/' -e 's/^#NewsOnUpgrade/NewsOnUpgrade/' "/etc/$AUR_HELPER.conf"
 else
   echo "[i] ${AUR_HELPER} already present."
 fi
 
 # -------- Install Commons --------
 AUR_LIST="$DIR/aur-packages.txt" install_aur_packages
+chsh -s "$(command -v zsh)" "$TARGET_USER" || true
 run_as_user '
   fc-cache -f
   mkdir -p "$XDG_CACHE_HOME/zsh" || true
-  chsh -s "$(command -v zsh)"
 '
 
 # -------- Bluetooth --------
@@ -155,6 +161,7 @@ case "$WINDOW_MANAGER" in
 	;;
   "none")
 	echo "[i] Skip Window Manager installation ..."
+	;;
   *)
 	echo "[!] Invalid Window Manager"
 	exit 1
@@ -197,20 +204,6 @@ bootstrap_dotfiles() {
       git --git-dir="$DOT_DIR" remote set-url origin "$REPO_URL" || true
       git --git-dir="$DOT_DIR" fetch --all --prune
     fi
-
-    # Try a checkout; if conflicts, back them up then retry
-    if ! git --git-dir="$DOT_DIR" --work-tree="$HOME" checkout; then
-      echo "[i] Backing up pre-existing files into $BACKUP_DIR"
-      git --git-dir="$DOT_DIR" --work-tree="$HOME" ls-tree -r --name-only HEAD | while read -r path; do
-        if [[ -f "$HOME/$path" || -d "$HOME/$path" ]] && [[ ! -L "$HOME/$path" ]]; then
-          mkdir -p "$BACKUP_DIR/$(dirname "$path")"
-          mv -f "$HOME/$path" "$BACKUP_DIR/$path" 2>/dev/null || true
-        fi
-      done
-      git --git-dir="$DOT_DIR" --work-tree="$HOME" checkout
-    fi
-
-    git --git-dir="$DOT_DIR" --work-tree="$HOME" submodule update --init --recursive || true
 
     echo "[✓] Dotfiles deployed. Backup (if any): $BACKUP_DIR"
   '
