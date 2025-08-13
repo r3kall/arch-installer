@@ -6,6 +6,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 umask 027
 
 echo "==== Post Install Script ===="
+timedatectl set-ntp true
 
 # Script Directory
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
@@ -103,15 +104,32 @@ fi
 # -------- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER}..."
+  
   run_as_user "
 	set -euo pipefail
-	tmpdir=\$(mktemp -d)
-	cd \$tmpdir
-	git clone https://aur.archlinux.org/$AUR_HELPER.git
+	TMPDIR=\"\${TMPDIR:-/var/tmp}\"
+
+	# --- mktemp + trap per cleanup garantito
+    tmp=\"\$(mktemp -d -p \$TMPDIR paru.XXXXXX)\"
+
+    cleanup() {
+      [[ -n \"\${tmp:-}\" && -d \"\$tmp\" ]] && rm -rf -- \"\$tmp\"
+    }
+
+    trap cleanup EXIT INT TERM
+
+	export MAKEFLAGS=\"\${MAKEFLAGS:--j\$(nproc)}\"
+    export CFLAGS=\"\${CFLAGS:--O2 -pipe}\"
+    export CXXFLAGS=\"\${CXXFLAGS:--O2 -pipe}\"
+
+	cd \"\$tmp\"
+	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
 	cd $AUR_HELPER
-	makepkg -si --noconfirm
+	# makepkg -si --noconfirm
+	nice -n 10 ionice -c3 makepkg -si --noconfirm --needed
   "
-  sed -i 's/#BottomUp/BottomUp/' /etc/$AUR_HELPER.conf
+
+  # sed -i 's/#BottomUp/BottomUp/' /etc/$AUR_HELPER.conf
 else
   echo "[i] ${AUR_HELPER} already present."
 fi
