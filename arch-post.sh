@@ -60,7 +60,7 @@ install_aur_packages() {
 # -------- Mirrors quick tune --------
 ping -c 1 -W 5 google.com >/dev/null
 if ! command -v reflector >/dev/null 2>&1; then pac reflector; fi
-reflector -c Italy,Switzerland,Germany,France -p https -l 16 -s rate \
+reflector -c Italy,Switzerland,Germany,France -p https -l 16 --sort rate \
 	--save /etc/pacman.d/mirrorlist || true
 pacman -Syyuq --noconfirm
 
@@ -97,9 +97,9 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER}..."
   run_as_user "
 	set -euo pipefail
-	tmp=\"$(mktemp -d)\"
+	tmp=$(mktemp -d)
 	sudo pacman --noconfirm --needed -S git base-devel
-	cd \"$tmp\"
+	cd $tmp
 	git clone https://aur.archlinux.org/$AUR_HELPER.git
 	cd $AUR_HELPER
 	makepkg -si --noconfirm
