@@ -17,38 +17,40 @@ KEYMAP="${KEYMAP:-it}"
 SWAP_SIZE_GB="${SWAP_SIZE_GB:-0}"  # set >0 to create a swapfile of that size
 
 #### Commands
-PM="pacman -S --needed --noconfirm"
-CH="arch-chroot /mnt"
-SL="sleep 2"
-
 die(){ echo "ERROR: $*" >&2; exit 1; }
+ch()  { arch-chroot /mnt "$@"; }
+pac() { arch-root /mnt pacman --noconfirm --needed -S "$@"; }
+sl()  { sleep 2; }
+is_virtualized() { systemd-detect-virt -q; }
+virt_what() { systemd-detect-virt 2>/dev/null || true; }
+gpu_vendor() { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
+
 
 init() {
   ping -c 1 -W 5 archlinux.org &>/dev/null || die "No network. Connect before running."
   timedatectl set-ntp true
   # Log everything
   exec &> >(tee -a "/var/log/install.log")
-  set -x
+  # set -x
 }
 
 partitioning () {
   [[ -x ./arch-parted.sh ]] || die "arch-parted.sh missing."
   ./arch-parted.sh
-  $SL
+  sl
 }
 
 system_install () {
-  echo "== System Installation =="
-
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector --country Italy,Germany,France -l 20 -p https --save /etc/pacman.d/mirrorlist
-  sleep 10
+  reflector -c Italy,Germany,France -l 16 -p https --save /etc/pacman.d/mirrorlist
+  sleep 8
 
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
   pacstrap /mnt base base-devel linux-lts linux-lts-headers
-  !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
+  # !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
+  if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
 
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
   sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
@@ -57,12 +59,12 @@ system_install () {
   genfstab -U /mnt >> /mnt/etc/fstab
 
   # Set root password
-  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $CH passwd
+  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | ch passwd
 
   ## Timezone settings
-  $CH ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+  ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
   echo ${TIMEZONE} > /mnt/etc/timezone
-  $CH hwclock --systohc
+  ch hwclock --systohc
 
   ## Locale settings
   # Uncomment needed locales with sed and generate them
@@ -71,7 +73,7 @@ system_install () {
   echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
   # Make the changes on keyboard layout persistent in vconsole.conf
   echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
-  $CH locale-gen
+  ch locale-gen
 
   # Create the hostname file
   echo $HOSTNAME > /mnt/etc/hostname
@@ -84,90 +86,90 @@ system_install () {
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
 
   ## Install tools
-  $CH $PM archlinux-keyring
-  $CH $PM linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
+  pac archlinux-keyring
+  pac linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
 
   # Install microcodes (if possible)
-  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $CH $PM intel-ucode
-  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && $CH $PM amd-ucode
+  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && pac intel-ucode
+  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && pac amd-ucode
 
   # Install NetworkManager
-  $CH $PM networkmanager
-  $CH systemctl enable NetworkManager.service
+  pac networkmanager
+  ch systemctl enable NetworkManager.service
   
   # GPU drivers
   if lspci | grep -E "VGA|3D|Display" | grep -qi nvidia; then
-    $CH $PM nvidia-lts nvidia-utils
+    pac nvidia-lts nvidia-utils
   elif lspci | grep -E "VGA|3D|Display" | grep -qi intel; then
-    $CH $PM mesa vulkan-intel intel-media-driver
+    pac mesa vulkan-intel intel-media-driver
   elif lspci | grep -E "VGA|3D|Display" | grep -qi amd; then
-    $CH $PM mesa vulkan-radeon libva-mesa-driver
+    pac mesa vulkan-radeon libva-mesa-driver
   else
-    $CH $PM mesa
+    pac mesa
   fi
 
   # Optional Swapfile
   if [[ "$SWAP_SIZE_GB" != "0" ]]; then
-    $CH fallocate -l "${SWAP_SIZE_GB}G" /swapfile
-    $CH chmod 600 /swapfile
-    $CH mkswap /swapfile
-    $CH swapon /swapfile
+    ch fallocate -l "${SWAP_SIZE_GB}G" /swapfile
+    ch chmod 600 /swapfile
+    ch mkswap /swapfile
+    ch swapon /swapfile
     echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
   fi
 
-  $SL
+  sl
 }
 
 # Initramfs
 initramfs() {
   local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
-  $CH sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
-  $CH mkinitcpio -P
-  $SL
+  ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
+  ch mkinitcpio -P
+  sl
 }
 
 # Boot loader - GRUB
 bootloader_grub() {
-  $CH $PM dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
-  $CH grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
-  $CH grub-mkconfig -o /boot/grub/grub.cfg
-  $SL
+  pac dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
+  ch grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
+  ch grub-mkconfig -o /boot/grub/grub.cfg
+  sl
 }
 
 # Boot loader - bootctl
 bootloader_bootctl() {
 
-  if $CH bootctl is-installed > /dev/null
+  if ch bootctl is-installed > /dev/null
   then
     echo "systemd already installed"
-    $CH mkdir -p /boot/loader/entries
+    ch mkdir -p /boot/loader/entries
   else
-    $CH bootctl install
+    ch bootctl install
   fi
 
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   # Change ucode if needed
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
-  $CH bootctl status
-  $SL
+  ch bootctl status
+  sl
 }
 
 # User configuration
 user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
-  $CH useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
+  ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
 
   # Add sudoer privileges
   # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/wheel
   # Set user password
-  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $CH passwd ${USERNAME}
+  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | ch passwd ${USERNAME}
 
-  $CH $PM xdg-user-dirs xdg-utils
+  pac xdg-user-dirs xdg-utils
   printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
-  $CH xdg-user-dirs-update
+  ch xdg-user-dirs-update
 
   # Set XDG env variables
   echo "" >> /mnt/etc/profile
@@ -179,7 +181,15 @@ user_install() {
 
   # Install virtualbox addons (if needed)
   # hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
-  $SL
+  local VIRT_KIND="$(virt_what)"
+  if is_virtualized; then
+	pac qemu-guest-agent spice-vdagent
+	ch systemctl enable qemu-guest-agent
+	echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
+  else
+	echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
+  fi
+  sl
 }
 
 main () {
@@ -191,7 +201,7 @@ main () {
   user_install
   
   # System update
-  $CH pacman -Syyuq --noconfirm
+  ch pacman -Syyuq --noconfirm
 }
 
 time main

@@ -1,0 +1,87 @@
+# ---- Common AUR package list (one per line) ----
+# Wayland core
+wayland
+gtk4
+qt5-base
+qt5-declarative
+qt5-wayland
+qt6-base
+qt6-declarative
+qt6-wayland
+xdg-desktop-portal
+uwsm
+libnewt
+xorg-xwayland
+
+# Fonts/Icons
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+ttf-dejavu
+ttf-ubuntu-mono-nerd
+ttf-hack
+ttf-hack-nerd
+
+# Terminal
+kitty
+foot
+zsh
+starship
+fastfetch
+zsh-completions
+zsh-autosuggestions
+zsh-syntax-highlighting
+zsh-history-substring-search
+
+# Audio
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+pavucontrol
+pulsemixer
+
+# Video
+ffmpeg
+gstreamer
+gst-libav
+gst-plugin-pipewire
+vlc
+
+# Notify/Panels
+libnotify
+gvfs
+swaync
+waybar
+
+# Theme / Wallpaper
+matugen-bin
+swww
+
+# Launchers
+rofi-wayland
+
+# Nvim
+neovim
+bash-language-server
+lua-language-server
+#pyright
+gopls
+#rust-analyzer
+
+# PDF
+file
+zathura
+zathura-pdf-mupdf
+
+# File Utils
+jq
+yq
+fd
+ripgrep
+fzf
+zoxide
+resvg
+imagemagick
+wl-clipboard
+yazi
