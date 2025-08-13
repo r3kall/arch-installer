@@ -56,7 +56,7 @@ run_as_user()	 { sudo -u "$TARGET_USER" -H bash -lc "$*"; }
 install_aur_packages() {
   if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
 	echo "[i] Installing AUR packages from $AUR_LIST ..."
-    run_as_user "${AUR_HELPER} -Syu ${PARU_ARGS} $(grep -vE '^\s*#' \"$AUR_LIST\" | sed '/^\s*$/d' | tr '\n' ' ')"
+    run_as_user "$AUR_HELPER -Syu $AUR_ARGS \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')"
   else
 	echo "[i] No AUR_LIST provided or file not found."
 	exit 1
