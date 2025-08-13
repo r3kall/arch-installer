@@ -68,12 +68,9 @@ install_aur_packages() {
 	chmod 440 /etc/sudoers.d/99-paru-pacman
 
     run_as_user '
-	  set -euo pipefail
       export CARGO_HOME="$XDG_DATA_HOME/cargo"
       export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
-	  mapfile -t PKGS < <(cat "'"$AUR_LIST"'" | grep -vE "^\s*#" | sed "/^\s*$/d")
-	  [[ ${#PKGS[@]} -eq 0 ]] && exit 0
-	  '$AUR_HELPER' -S "${PKGS[@]}" --needed --noconfirm --skipreview --mflags "--nocheck" -c
+	  '$AUR_HELPER' -Syu '$AUR_ARGS' $(cat '$AUR_LIST' | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
 	'
 	rm -f /etc/sudoers.d/99-paru-pacman
   else
@@ -140,7 +137,6 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	TMPDIR="${TMPDIR:-/var/tmp}"
 	AUR_HELPER="'"$AUR_HELPER"'"
     PKGDEST="'"$TARGET_USER_PKGDEST"'"
-	echo $PKGDEST
 	
 	mkdir -p $PKGDEST || true
     tmp="$(mktemp -d -p $TMPDIR paru.XXXXXX)"
