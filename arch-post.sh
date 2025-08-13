@@ -92,6 +92,9 @@ run_as_user '
   rustup default stable
 '
 
+run_as_user 'env | grep HOME'
+exit 1
+
 if ! command -v docker >/dev/null 2>&1; then
   # Install Docker
   pac docker
@@ -175,7 +178,7 @@ case "$DISPLAY_MANAGER" in
 	sysen sddm
 	;;
   "ly")
-	run_as_user "$AUR_HELPER $AUR_ARGS ly"
+	pac ly
 	sysen ly
 	;;
   *)
