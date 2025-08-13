@@ -19,7 +19,7 @@ SWAP_SIZE_GB="${SWAP_SIZE_GB:-0}"  # set >0 to create a swapfile of that size
 #### Commands
 die(){ echo "ERROR: $*" >&2; exit 1; }
 ch()  { arch-chroot /mnt "$@"; }
-pac() { arch-root /mnt pacman --noconfirm --needed -S "$@"; }
+pac() { arch-chroot /mnt pacman --noconfirm --needed -S "$@"; }
 sl()  { sleep 2; }
 is_virtualized() { systemd-detect-virt -q; }
 virt_what() { systemd-detect-virt 2>/dev/null || true; }
