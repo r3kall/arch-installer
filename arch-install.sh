@@ -163,7 +163,8 @@ user_install() {
 
   # Add sudoer privileges
   # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
-  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/wheel
+  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
+  ch chmod 440 /etc/sudoers.d/10-wheel
   # Set user password
   ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | ch passwd ${USERNAME}
 
