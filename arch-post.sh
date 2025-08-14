@@ -55,7 +55,7 @@ add_user_nopasswd() {
   chmod 440 "$SUDOERFILE"
   chown root:root "$SUDOERFILE"
 
-  if ! visudo -cf "$SUDOERFILE" >/dev/null; then
+  if ! visudo -c >/dev/null; then
 	echo "[!] Sudoers config invalid, reverting." >&2
 	exit 1
   else
