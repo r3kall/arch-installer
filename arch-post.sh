@@ -123,7 +123,7 @@ if ! command -v reflector >/dev/null; then pac reflector; fi
 reflector -c Italy,Switzerland,Germany -p https -l 10 --save /etc/pacman.d/mirrorlist || true
 
 echo "[i] Upgrading full system ..."
-pacman -Syu --noconfirm
+pacman -Syyu --noconfirm
 
 # --- Core Packages --------
 echo "[i] Installing Core Packages ..."
