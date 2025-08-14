@@ -119,7 +119,7 @@ timedatectl set-ntp true
 ping -c 1 -W 5 www.google.com >/dev/null 
 
 # Mirror refresh (best effort)
-if ! command -v reflector >/dev/null 2>&1; then pac reflector; fi
+if ! command -v reflector >/dev/null; then pac reflector; fi
 reflector -c Italy,Switzerland,Germany -p https -l 10 --save /etc/pacman.d/mirrorlist || true
 
 echo "[i] Upgrading full system ..."
