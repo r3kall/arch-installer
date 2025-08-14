@@ -1,32 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Root requirement ---
 if (( EUID != 0 )); then
-  echo "[!] Re-exec with sudo please"
+  echo "[!] Re-exec with sudo please." >&2
   exit 1
 fi
 
-# Set unambigous PATH for root
+# --- Environment and Logging ---
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 umask 027
 
-trap cleanup ERR TERM EXIT
+SCRIPT_NAME="$(basename "$0")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+RUN_ID="$(date +%Y%m%d-%H%M%S)"
+LOG="${LOG:-/var/log/${SCRIPT_NAME%.sh}-${RUN_ID}.log}"
+exec > >(tee -a "$LOG") 2>&1
 
-# Target User
+# --- Globals / Profiles ---
 TARGET_USER="${TARGET_USER:-${SUDO_USER:-}}"
 if [[ -z "${TARGET_USER}" || "${TARGET_USER}" == "root" ]]; then
   read -rp "Enter target username: " TARGET_USER
 fi
 
-# Target User Home Dir
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 : "${TARGET_HOME:?User home not found}"
 
-# Profiles
 WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|all|none
 DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
 ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0	
 ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
+
 AUR_HELPER="${AUR_HELPER:-paru}"				# paru|yay
 AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview}" # extra args
 
@@ -34,17 +38,16 @@ DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/r3kall/dotfiles}"
 DOTFILES_DIR="${DOTFILES_DIR:-$TARGET_HOME/.dotfiles}"  # bare repo dir
 
 SUDOERFILE="${SUDOERFILE:-/etc/sudoers.d/99-user-tmp-permissions}"
-DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-LOG="${LOG:-/var/log/arch-post.log}"
-exec > >(tee -a "$LOG") 2>&1
 
-# -------- Helpers --------
+# --- Helpers ---
 pac()			 { pacman --noconfirm --needed -S "$@"; }
 sysen()			 { systemctl enable "$@"; }
+run_as_user()	 { sudo -u "$TARGET_USER" -H -- bash -lc "$*"; }
+
+# (Optional)
 is_virtualized() { systemd-detect-virt -q; }
 virt_what()		 { systemd-detect-virt 2>/dev/null || true; }
 gpu_vendor()	 { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
-run_as_user()	 { sudo -u "$TARGET_USER" -H bash -lc "$*"; }
 
 add_user_nopasswd() {
   echo "[i] Adding temp sudoers permission to user $TARGET_USER ..."
@@ -52,16 +55,19 @@ add_user_nopasswd() {
   chmod 440 "$SUDOERFILE"
   chown root:root "$SUDOERFILE"
 
-  if ! visudo -cf "$SUDOFILE" >/dev/null; then
-	echo "[!] sudoers entry invalid, reverting."; exit 1
+  if ! visudo -cf >/dev/null; then
+	echo "[!] Sudoers config invalid, reverting." >&2
+	exit 1
   else
-	echo "[i] sudoers entry valid."
+	echo "[✓] Sudoers config valid."
   fi
 }
 
 remove_user_nopasswd() {
-  echo "[i] Removing temp sudoers permission to user $TARGET_USER ..."
-  [ -f "$SUDOERFILE" ] && rm -f "$SUDOERFILE"
+  if [[ -f "$SUDOERFILE" ]]; then
+    echo "[i] Removing temp sudoers permission for $TARGET_USER ..."
+    rm -f "$SUDOERFILE" || true
+  fi
 }
 
 install_aur_packages() {
@@ -74,37 +80,58 @@ install_aur_packages() {
 	"
 	echo "[✓] Packages from $AUR_LIST installed."
   else
-	echo "[i] No AUR_LIST provided or file not found."
+	echo "[!] AUR_LIST not provided or file not found."
 	exit 1
   fi
 }
 
+# --- Cleanup & traps ---------------------------------------------------------
+_cleanup_ran=0
 cleanup() {
-  remove_user_nopasswd
-  if [ $? -eq 0 ]; then
-	echo "[✓] Post Install Successful. You can safely reboot now. "
+  local reason="${1:-EXIT}"
+  local code="${2:-0}"
+  local cmd="${3:-}"
+  local line="${4:-}"
+
+  [[ $_cleanup_ran -eq 1 ]] && return 0
+  _cleanup_ran=1
+
+  remove_user_nopasswd || true
+
+  if [[ "$reason" == "ERR" ]]; then
+    echo "[!] Error (exit $code) at line $line: $cmd"
+    echo "[!] See log: $LOG"
   else
-	echo "[!] Error on line ${LINENO}. See $LOG."
+    echo "[✓] Post Install finished with code $code."
+    echo "[i] Log: $LOG"
   fi
 }
 
+trap 'cleanup ERR "$?" "$BASH_COMMAND" "$LINENO"' ERR
+trap 'cleanup TERM "$?"' TERM
+trap 'cleanup EXIT "$?"' EXIT
 
+# --- Begin ---
 echo "[i] Starting Post Install ..."
 timedatectl set-ntp true
-ping -c 1 -W 5 google.com >/dev/null
+
+# Network probe
+ping -c 1 -W 5 www.google.com >/dev/null 
+
+# Mirror refresh (best effort)
 if ! command -v reflector >/dev/null 2>&1; then pac reflector; fi
 reflector -c Italy,Switzerland,Germany -p https -l 10 --save /etc/pacman.d/mirrorlist || true
-echo "[i] Upgrading full system ..."
-pacman -Syyuq --noconfirm
 
-# -------- Core Packages --------
+echo "[i] Upgrading full system ..."
+pacman -Syu --noconfirm
+
+# --- Core Packages --------
 echo "[i] Installing Core Packages ..."
 pac		\
   gcc     \
   python  \
   rustup  \
   go      \
-  nvm     \
   flatpak \
   bat     \
   eza     \
@@ -118,13 +145,12 @@ run_as_user '
 '
 
 if ! command -v docker >/dev/null 2>&1; then
-  # Install Docker
   pac docker
   groupadd -f docker
   usermod -aG docker $TARGET_USER
 
   # Enable native overlay diff engine
-  echo "options overlay metacopy=off redirect_dir=off" | tee /etc/modprobe.d/disable-overlay-redirect-dir.conf
+  echo "options overlay metacopy=off redirect_dir=off" | tee /etc/modprobe.d/disable-overlay-redirect-dir.conf >/dev/null
   modprobe -r overlay
   modprobe overlay
   sysen docker
@@ -132,10 +158,10 @@ fi
 
 echo "[✓] Core Packages Installed."
 
-# -------- Add sudoers --------
+# --- Add User to sudoers ---
 add_user_nopasswd
 
-# -------- Install AUR helper --------
+# --- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER} ..."
   pac ccache
@@ -149,21 +175,27 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 	
 	TMPDIR="${TMPDIR:-/var/tmp}"
 	AUR_HELPER="'"$AUR_HELPER"'"
-    tmp="$(mktemp -d -p $TMPDIR paru.XXXXXX)"
+    tmp="$(mktemp -d -p $TMPDIR $AUR_HELPER.XXXXXX)"
 	cd "$tmp"
 	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
 	cd "$AUR_HELPER"
 	makepkg -sri --noconfirm --needed 
   '
-
-  sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
-  # sed -i -e 's/^#CombinedUpgrade/CombinedUpgrade/' -e 's/^#NewsOnUpgrade/NewsOnUpgrade/' "/etc/$AUR_HELPER.conf"
+  [[ -f "/etc/${AUR_HELPER}.conf" ]] && \
+    sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
+  
+  echo "[✓] AUR Helper Installed."
 else
   echo "[i] ${AUR_HELPER} already present."
 fi
 
-# -------- Install Commons --------
+# --- Install Common AUR packages list --------
 AUR_LIST="$DIR/aur-packages.txt" install_aur_packages
+
+# --- SHELL config ---
+# zsh as default shell for the user (no password prompt)
+# TODO: parametric shell
+if command -v zsh >/dev/null 2>&1; then
 # chsh -s "$(run_as_user 'command -v zsh')" "$TARGET_USER" || true
 run_as_user '
   fc-cache -f
@@ -171,18 +203,19 @@ run_as_user '
   mkdir -p "$XDG_CACHE_HOME/zsh" || true
 '
 
-# -------- Bluetooth --------
+# --- Bluetooth --------
 if [[ "$ENABLE_BLUETOOTH" == "1" ]]; then
   pac bluez bluez-utils blueman
   sysen bluetooth
 fi
 
-# -------- Printing --------
+# --- Printing --------
 if [[ "$ENABLE_CUPS" == "1" ]]; then
   pac cups cups-pdf system-config-printer
   sysen cups
 fi
 
+# --- Window Manager -------
 case "$WINDOW_MANAGER" in
   "hyprland")
 	echo "[i] Installing Hyprland ..."
@@ -192,11 +225,12 @@ case "$WINDOW_MANAGER" in
 	echo "[i] Skip Window Manager installation ..."
 	;;
   *)
-	echo "[!] Invalid Window Manager."
+	echo "[!] Invalid Window Manager." >&2
 	exit 1
 	;;
 esac
 
+# --- Display Manager -----
 case "$DISPLAY_MANAGER" in
   "sddm")
 	# Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
@@ -208,7 +242,7 @@ case "$DISPLAY_MANAGER" in
 	sysen ly
 	;;
   *)
-	echo "[!] Invalid Display Manager."
+	echo "[!] Invalid Display Manager." >&2
 	exit 1
 	;;
 esac
