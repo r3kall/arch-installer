@@ -195,12 +195,21 @@ AUR_LIST="$DIR/aur-packages.txt" install_aur_packages
 # --- SHELL config ---
 # zsh as default shell for the user (no password prompt)
 # TODO: parametric shell
-if command -v zsh >/dev/null 2>&1; then
+# if command -v zsh >/dev/null 2>&1; then
 # chsh -s "$(run_as_user 'command -v zsh')" "$TARGET_USER" || true
 run_as_user '
   fc-cache -f
   chsh -s $(command -v zsh) || true
   mkdir -p "$XDG_CACHE_HOME/zsh" || true
+'
+
+run_as_user '
+  eval "$(fnm env --shell bash)"
+  fnm install --lts
+  fnm default lts-latest
+  corepack enable || true
+  # optional: common global tools
+  # npm -g install typescript eslint yarn pnpm || true
 '
 
 # --- Bluetooth --------
