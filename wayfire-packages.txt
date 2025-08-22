@@ -1,0 +1,4 @@
+wayfire
+wf-config
+wayfire-plugins-extra
+

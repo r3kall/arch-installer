@@ -230,6 +230,10 @@ case "$WINDOW_MANAGER" in
 	echo "[i] Installing Hyprland ..."
 	AUR_LIST="$DIR/hyprland-packages.txt" install_aur_packages
 	;;
+  "wayfire")
+	echo "[i] Installing Wayfire ..."
+	AUR_LIST="$DIR/wayfire-packages.txt" install_aur_packages
+	;;
   "none")
 	echo "[i] Skip Window Manager installation ..."
 	;;

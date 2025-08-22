@@ -49,6 +49,10 @@ gst-libav
 gst-plugin-pipewire
 vlc
 
+# Screenshot
+grim
+slurp
+
 # Notify/Panels
 libnotify
 gvfs
