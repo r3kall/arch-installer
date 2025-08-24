@@ -190,7 +190,7 @@ else
 fi
 
 # --- Install Common AUR packages list --------
-AUR_LIST="$DIR/aur-packages.txt" install_aur_packages
+AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
 
 # --- SHELL config ---
 # zsh as default shell for the user (no password prompt)
@@ -228,11 +228,11 @@ fi
 case "$WINDOW_MANAGER" in
   "hyprland")
 	echo "[i] Installing Hyprland ..."
-	AUR_LIST="$DIR/hyprland-packages.txt" install_aur_packages
+	AUR_LIST="$SCRIPT_DIR/hyprland-packages.txt" install_aur_packages
 	;;
   "wayfire")
 	echo "[i] Installing Wayfire ..."
-	AUR_LIST="$DIR/wayfire-packages.txt" install_aur_packages
+	AUR_LIST="$SCRIPT_DIR/wayfire-packages.txt" install_aur_packages
 	;;
   "none")
 	echo "[i] Skip Window Manager installation ..."
