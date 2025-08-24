@@ -124,7 +124,10 @@ ping -c 1 -W 5 www.google.com >/dev/null
 
 # Mirror refresh (best effort)
 if ! command -v reflector >/dev/null; then pac reflector; fi
-reflector -c Italy,Switzerland,Germany -p https -l 32 --save /etc/pacman.d/mirrorlist || true
+reflector -c Italy,Switzerland,Germany -p https -l 20 --save /etc/pacman.d/mirrorlist
+
+echo "[i] Upgrading full system ..."
+pacman -Syu --noconfirm
 
 # --- Core Packages --------
 echo "[i] Installing Core Packages ..."
@@ -282,5 +285,3 @@ bootstrap_dotfiles() {
 }
 bootstrap_dotfiles
 
-echo "[i] Upgrading full system ..."
-pacman -Syu --noconfirm
