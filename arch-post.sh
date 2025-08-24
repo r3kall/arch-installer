@@ -124,7 +124,7 @@ ping -c 1 -W 5 www.google.com >/dev/null
 
 # Mirror refresh (best effort)
 if ! command -v reflector >/dev/null; then pac reflector; fi
-reflector -c Italy,Switzerland,Germany -p https -l 10 --save /etc/pacman.d/mirrorlist || true
+reflector -c Italy,Switzerland,Germany -p https -l 32 --save /etc/pacman.d/mirrorlist || true
 
 # --- Core Packages --------
 echo "[i] Installing Core Packages ..."
