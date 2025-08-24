@@ -112,6 +112,10 @@ trap 'cleanup TERM "$?"' TERM
 trap 'cleanup EXIT "$?"' EXIT
 
 # --- Begin ---
+
+# Add User to sudoers
+add_user_nopasswd
+
 echo "[i] Starting Post Install ..."
 timedatectl set-ntp true
 
@@ -121,9 +125,6 @@ ping -c 1 -W 5 www.google.com >/dev/null
 # Mirror refresh (best effort)
 if ! command -v reflector >/dev/null; then pac reflector; fi
 reflector -c Italy,Switzerland,Germany -p https -l 10 --save /etc/pacman.d/mirrorlist || true
-
-echo "[i] Upgrading full system ..."
-pacman -Syyu --noconfirm
 
 # --- Core Packages --------
 echo "[i] Installing Core Packages ..."
@@ -157,9 +158,6 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "[✓] Core Packages Installed."
-
-# --- Add User to sudoers ---
-add_user_nopasswd
 
 # --- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
@@ -284,3 +282,5 @@ bootstrap_dotfiles() {
 }
 bootstrap_dotfiles
 
+echo "[i] Upgrading full system ..."
+pacman -Syu --noconfirm
