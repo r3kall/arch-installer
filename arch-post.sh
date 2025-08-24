@@ -224,6 +224,7 @@ if [[ "$ENABLE_CUPS" == "1" ]]; then
   sysen cups
 fi
 
+echo "WM: $WINDOW_MANAGER"
 # --- Window Manager -------
 case "$WINDOW_MANAGER" in
   "hyprland")
