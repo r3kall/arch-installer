@@ -124,7 +124,9 @@ ping -c 1 -W 5 www.google.com >/dev/null
 
 # Mirror refresh (best effort)
 if ! command -v reflector >/dev/null; then pac reflector; fi
-reflector -c Italy,Switzerland,Germany -p https -l 20 --save /etc/pacman.d/mirrorlist
+run_as_user '
+  reflector -c Italy,Germany -p https -l 20 --sort rate --verbose --save /etc/pacman.d/mirrorlist
+'
 
 echo "[i] Upgrading full system ..."
 pacman -Syu --noconfirm
