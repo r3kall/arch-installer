@@ -22,20 +22,33 @@ init () {
 
 core() {
   sudo pacman -Syyuq --noconfirm
-
-  sudo pacman -S --noconfirm --needed \
-    gcc     \
-    python  \
-    rustup  \
-    go      \
-    nvm     \
-    flatpak \
-    bat     \
-    eza     \
-    fd      \
-    fzf
-
-  rustup default stable
+  # Configure Runtimes/DevTools Env Variables
+  sudo pacman -S --noconfirm --needed mise
+  mise set -g PYTHON_HISTORY="$XDG_DATA_HOME/python/history"
+  mise set -g PYTHONSTARTUP="$XDG_CONFIG_HOME/python/pythonrc"
+  mise set -g NPM_CONFIG_USERCONFIG="$XDG_CONFIG_HOME/npm/npmrc"
+  mise set -g GOPATH="$XDG_DATA_HOME/go"
+  mise set -g GOBIN="$GOPATH/bin"
+  mise set -g GOMODCACHE="$XDG_CACHE_HOME/go/mod"
+  mise set -g CARGO_HOME="$XDG_DATA_HOME/cargo"
+  mise set -g RUSTUP_HOME="$XDG_DATA_HOME/rustup"
+  mise set -g TF_DATA_DIR="$XDG_DATA_HOME/terraform"
+  mise set -g TF_PLUGIN_CACHE_DIR="$XDG_CACHE_HOME/terraform/plugins"
+  mise set -g TERRAGRUNT_DOWNLOAD="$XDG_CACHE_HOME/terragrunt"
+  mise set -g ANSIBLE_HOME="$XDG_DATA_HOME/ansible"
+  mise set -g HELM_CACHE_HOME="$XDG_CACHE_HOME/helm"
+  mise set -g HELM_CONFIG_HOME="$XDG_CONFIG_HOME/helm"
+  mise set -g HELM_DATA_HOME="$XDG_DATA_HOME/helm"
+  mise set -g HELMFILE_CACHE_HOME="$XDG_CACHE_HOME/helmfile"
+  mise use -g python@latest
+  mise use -g node@latest
+  mise use -g go@latest
+  mise use -g rust@latest
+  mise use -g terraform@latest opentofu@latest terragrunt@latest
+  mise use -g ansible@latest
+  mise use -g helm@latest
+  mise use -g helmfile@latest
+  mise activate
 
   if ! command -v docker >/dev/null; then
 	  # Install Docker
@@ -125,10 +138,12 @@ display_manager() {
       echo -n "Invalid variable name."
       exit 1
       ;;
-  esac 
+  esac
 }
 
 utils() {
+  # File utilities
+  $AUR bat eza jq yq fd ripgrep fzf zoxide resvg imagemagick wl-clipboard yazi
   # Audio
   $AUR pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber pavucontrol pulsemixer
   # Multimedia
@@ -138,13 +153,11 @@ utils() {
   # Theming + wallpapers
   $AUR matugen-bin swww
   # Launcher
-  $AUR rofi-wayland
+  $AUR wofi
   # Editors & LSPs
-  $AUR neovim bash-language-server lua-language-server pyright gopls rust-analyzer
+  # $AUR neovim bash-language-server lua-language-server pyright gopls rust-analyzer
   # PDF
   $AUR sqlite file zathura zathura-pdf-mupdf
-  # File utilities
-  $AUR jq yq fd ripgrep fzf zoxide resvg imagemagick wl-clipboard yazi
 }
 
 install_hyprland() {
@@ -179,18 +192,18 @@ waybar() {
 
 extra() {
   if [[ "$ENABLE_QEMU_GUEST" -eq 1 ]]; then
-	$AUR qemu-guest-agent
-	sudo systemctl enable qemu-guest-agent.service
+	  $AUR qemu-guest-agent
+	  sudo systemctl enable qemu-guest-agent.service
   fi
-  
+
   if [[ "$ENABLE_CUPS" -eq 1 ]]; then
-	$AUR cups cups-pdf system-config-printer
-	sudo systemctl enable cups.service
+	  $AUR cups cups-pdf system-config-printer
+	  sudo systemctl enable cups.service
   fi
-  
+
   if [[ "$ENABLE_BLUETOOTH" -eq 1 ]]; then
-	$AUR bluez bluez-utils blueman
-	sudo systemctl enable bluetooth.service
+	  $AUR bluez bluez-utils blueman
+	  sudo systemctl enable bluetooth.service
   fi
 
   #flatpak install -y --noninteractive flathub com.spotify.Client

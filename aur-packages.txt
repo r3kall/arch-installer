@@ -1,6 +1,5 @@
 # ---- Common AUR package list (one per line) ----
 # Wayland core
-fnm
 wayland
 gtk4
 qt5-base
