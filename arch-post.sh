@@ -3,9 +3,12 @@ set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+echo "Starting $SCRIPT_NAME in $SCRIPT_DIR."
+
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 LOG="${LOG:-/var/log/${SCRIPT_NAME%.sh}-${RUN_ID}.log}"
-exec > >(tee -a "$LOG") 2>&1
+exec &> >(sudo tee -a "/var/log/$LOG")
+set -x
 
 # --- Globals / Profiles ---
 TARGET_USER="${TARGET_USER:-${USER:-}}"
@@ -68,7 +71,7 @@ trap 'cleanup EXIT "$?"' EXIT
 # --- Begin ---
 
 echo "[i] Starting Post Install ..."
-timedatectl set-ntp true
+sudo timedatectl set-ntp true
 
 # Network probe
 ping -c 1 -W 5 www.google.com >/dev/null
@@ -104,7 +107,7 @@ for f in "$HOME"/.config/environment.d/*.conf; do
   . "$f"
 done
 set +a
-env | grep EDITOR
+env | grep TERM
 
 # --- Docker --------
 if ! command -v docker >/dev/null 2>&1; then
@@ -128,7 +131,6 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   sudo sed -i 's/^#\?BUILDENV=.*/BUILDENV=(!distcc color ccache check !sign)/' /etc/makepkg.conf
 
   TMPDIR="${TMPDIR:-/var/tmp}"
-  AUR_HELPER="'"$AUR_HELPER"'"
   tmp="$(mktemp -d -p $TMPDIR $AUR_HELPER.XXXXXX)"
   cd "$tmp"
   git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER-bin.git
