@@ -11,6 +11,7 @@ qt6-base
 qt6-declarative
 qt6-wayland
 xdg-desktop-portal
+polkit
 uwsm
 libnewt
 xorg-xwayland
@@ -25,7 +26,6 @@ ttf-hack
 ttf-hack-nerd
 
 # Terminal
-kitty
 ghostty
 foot
 zsh
@@ -80,9 +80,11 @@ zathura-pdf-mupdf
 
 # Utils
 mise
+bat
+eza
+fd
 jq
 yq
-fd
 ripgrep
 fzf
 zoxide

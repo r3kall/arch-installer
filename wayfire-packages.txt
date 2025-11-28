@@ -1,3 +1,4 @@
+polkit-gnome
 wlroots
 wayfire
 wayfire-plugins-extra
