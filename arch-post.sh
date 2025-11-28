@@ -85,12 +85,13 @@ bootstrap_dotfiles() {
   echo "[i] Bootstrapping dotfiles for ${TARGET_USER} from ${DOTFILES_REPO} ..."
   if [[ ! -d "$DOTFILES_DIR" ]]; then
     git clone --bare "$DOTFILES_REPO" "$DOTFILES_DIR"
-    git --git-dir="$DOTFILES_DIR" --work-tree="$HOME" config status.showUntrackedFiles no
   else
     echo "[i] Dotfiles bare repo already exists at $DOTFILES_DIR"
     git --git-dir="$DOTFILES_DIR" remote set-url origin "$DOTFILES_REPO" || true
     git --git-dir="$DOTFILES_DIR" fetch --all --prune
   fi
+  git --git-dir="$DOTFILES_DIR" --work-tree="$HOME" checkout
+  git --git-dir="$DOTFILES_DIR" --work-tree="$HOME" config status.showUntrackedFiles no
   echo "[✓] Dotfiles deployed."
 }
 bootstrap_dotfiles
