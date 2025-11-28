@@ -1,0 +1,15 @@
+# ---- Hyprland packages ----
+xdg-desktop-portal-hyprland
+hyprutils
+hyprlang
+hyprcursor
+hyprwayland-scanner
+aquamarine
+hyprgraphics
+hyprland-qt-support
+hypridle
+hyprlock
+hyprpicker
+hyprsunset
+hyprpolkitagent
+hyprland

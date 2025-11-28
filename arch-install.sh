@@ -1,74 +1,56 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+
 # Note: Arch Linux installation images do not support Secure Boot.
 # You will need to disable Secure Boot to boot the installation medium.
 # If desired, Secure Boot can be set up after completing the installation.
 
 
-#### Variables
-USERNAME="arch"
-HOSTNAME="linux"
-
-ROOT_PASSWORD="root"
-USER_PASSWORD="admin"
-
-TIMEZONE="Europe/Rome"
-LOCALE="en_US.UTF-8 UTF-8"
-KEYMAP="it"
+# ===== User variables =====
+USERNAME="${USERNAME:-arch}"
+HOSTNAME="${HOSTNAME:-linux}"
+ROOT_PASSWORD="${ROOT_PASSWORD:-root}"
+USER_PASSWORD="${USER_PASSWORD:-admin}"
+TIMEZONE="${TIMEZONE:-Europe/Rome}"
+LOCALE="${LOCALE:-en_US.UTF-8 UTF-8}"
+KEYMAP="${KEYMAP:-it}"
+SWAP_SIZE_GB="${SWAP_SIZE_GB:-0}"  # set >0 to create a swapfile of that size
 
 #### Commands
-PM="pacman -Sq --needed --noconfirm"
-CH="arch-chroot /mnt"
-SL="sleep 2"
+die(){ echo "ERROR: $*" >&2; exit 1; }
+ch()  { arch-chroot /mnt "$@"; }
+pac() { arch-chroot /mnt pacman --noconfirm --needed -S "$@"; }
+sl()  { sleep 2; }
+is_virtualized() { systemd-detect-virt -q; }
+virt_what() { systemd-detect-virt 2>/dev/null || true; }
+gpu_vendor() { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
 
 
-function die() { local _message="${*}"; echo "${_message}"; exit; }
-
-
-function init () {
-  if ping -c 1 -W 5 google.com &> /dev/null; then
-    echo "Arch Installer starting."
-  else
-    die "Arch Installer stopping: no connection."
-  fi
-
-  # Update the system clock
+init() {
+  ping -c 1 -W 5 archlinux.org &>/dev/null || die "No network. Connect before running."
   timedatectl set-ntp true
-  sleep 8
-
-  # Generates a log file with all commands and outputs during installation
+  # Log everything
   exec &> >(tee -a "/var/log/install.log")
-  set -x
-  $SL
+  # set -x
 }
 
-function partitioning () {
-  read -p 'Continue with Disk Partitioning? [y/N]: ' fsok
-  if ! [ $fsok = 'y' ] && ! [ $fsok = 'Y' ]; then
-    die "Edit the script to continue. Exiting."
-  else
-    if [[ $(ls /sys/firmware/efi/efivars) ]]; then
-      echo "Formatting partitions with parted."
-      /bin/bash arch-parted.sh
-    else
-      die "Not EFI system. Exiting."
-    fi
-  fi
-  $SL
+partitioning () {
+  [[ -x ./arch-parted.sh ]] || die "arch-parted.sh missing."
+  ./arch-parted.sh
+  sl
 }
 
-function system_install () {
-  echo "Starting system installation."
-
+system_install () {
   # Update mirrors
   # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector --country Italy,Germany,France -l 20 -p https --save /etc/pacman.d/mirrorlist
-  sleep 10
+  reflector -c Italy,Germany,France -l 16 -p https --save /etc/pacman.d/mirrorlist
+  sleep 8
 
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  pacstrap /mnt base base-devel linux-lts
-  !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
+  pacstrap /mnt base base-devel linux-lts linux-lts-headers
+  # !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
+  if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
 
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
   sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
@@ -77,12 +59,12 @@ function system_install () {
   genfstab -U /mnt >> /mnt/etc/fstab
 
   # Set root password
-  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | $CH passwd
+  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | ch passwd
 
   ## Timezone settings
-  $CH ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+  ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
   echo ${TIMEZONE} > /mnt/etc/timezone
-  $CH hwclock --systohc
+  ch hwclock --systohc
 
   ## Locale settings
   # Uncomment needed locales with sed and generate them
@@ -91,11 +73,10 @@ function system_install () {
   echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
   # Make the changes on keyboard layout persistent in vconsole.conf
   echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
-  $CH locale-gen
+  ch locale-gen
 
   # Create the hostname file
   echo $HOSTNAME > /mnt/etc/hostname
-
   # Add matching entries to hosts
   echo "# The following lines are desirable for IPv4 capable hosts" >> /mnt/etc/hosts
   echo "127.0.0.1         localhost" >> /mnt/etc/hosts
@@ -104,72 +85,92 @@ function system_install () {
   echo "ff02::1           ip6-allnodes" >> /mnt/etc/hosts
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
 
-  ## System upgrade
-  $CH $PM archlinux-keyring
-  $CH pacman -Syyuq --noconfirm
-  $CH $PM linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
+  ## Install tools
+  pac archlinux-keyring
+  pac linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
 
   # Install microcodes (if possible)
-  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && $CH $PM intel-ucode
-  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && $CH $PM amd-ucode
+  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && pac intel-ucode
+  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && pac amd-ucode
 
   # Install NetworkManager
-  $CH $PM networkmanager
-  $CH systemctl enable NetworkManager.service
+  pac networkmanager
+  ch systemctl enable NetworkManager.service
+  
+  # GPU drivers
+  if lspci | grep -E "VGA|3D|Display" | grep -qi nvidia; then
+    pac nvidia-lts nvidia-utils
+  elif lspci | grep -E "VGA|3D|Display" | grep -qi intel; then
+    pac mesa vulkan-intel intel-media-driver
+  elif lspci | grep -E "VGA|3D|Display" | grep -qi amd; then
+    pac mesa vulkan-radeon libva-mesa-driver
+  else
+    pac mesa
+  fi
 
-  $SL
+  # Optional Swapfile
+  if [[ "$SWAP_SIZE_GB" != "0" ]]; then
+    ch fallocate -l "${SWAP_SIZE_GB}G" /swapfile
+    ch chmod 600 /swapfile
+    ch mkswap /swapfile
+    ch swapon /swapfile
+    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
+  fi
+
+  sl
 }
 
 # Initramfs
-function initramfs() {
+initramfs() {
   local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
-  $CH sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
-  $CH mkinitcpio -P
-  $SL
+  ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
+  ch mkinitcpio -P
+  sl
 }
 
 # Boot loader - GRUB
-function bootloader_grub() {
-  $CH $PM dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
-  $CH grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
-  $CH grub-mkconfig -o /boot/grub/grub.cfg
-  $SL
+bootloader_grub() {
+  pac dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
+  ch grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
+  ch grub-mkconfig -o /boot/grub/grub.cfg
+  sl
 }
 
 # Boot loader - bootctl
-function bootloader_bootctl() {
+bootloader_bootctl() {
 
-  if $CH bootctl is-installed > /dev/null
+  if ch bootctl is-installed > /dev/null
   then
     echo "systemd already installed"
-    $CH mkdir -p /boot/loader/entries
+    ch mkdir -p /boot/loader/entries
   else
-    $CH bootctl install
+    ch bootctl install
   fi
 
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   # Change ucode if needed
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
   printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
-  $CH bootctl status
-  $SL
+  ch bootctl status
+  sl
 }
 
 # User configuration
-function user_install() {
+user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
-  $CH useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
+  ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
 
   # Add sudoer privileges
   # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
-  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/wheel
+  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
+  ch chmod 440 /etc/sudoers.d/10-wheel
   # Set user password
-  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | $CH passwd ${USERNAME}
+  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | ch passwd ${USERNAME}
 
-  $CH $PM xdg-user-dirs xdg-utils
+  pac xdg-user-dirs xdg-utils
   printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
-  $CH xdg-user-dirs-update
+  ch xdg-user-dirs-update
 
   # Set XDG env variables
   echo "" >> /mnt/etc/profile
@@ -180,18 +181,28 @@ function user_install() {
   echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
 
   # Install virtualbox addons (if needed)
-  hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
-  $SL
+  # hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
+  local VIRT_KIND="$(virt_what)"
+  if is_virtualized; then
+	pac qemu-guest-agent spice-vdagent
+	ch systemctl enable qemu-guest-agent
+	echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
+  else
+	echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
+  fi
+  sl
 }
 
-
-function main () {
+main () {
   init
   partitioning
   system_install
   initramfs
   bootloader_grub
   user_install
+  
+  # System update
+  ch pacman -Syyuq --noconfirm
 }
 
 time main
@@ -199,5 +210,4 @@ cp /var/log/install.log /mnt/var/log
 
 umount -R /mnt/boot
 umount -R /mnt
-$SL
-reboot
+echo "Installation complete. You can now reboot."
