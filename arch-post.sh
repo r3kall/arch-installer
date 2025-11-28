@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+SCRIPT_NAME=${0##*/}
+SCRIPT_DIR=$(cd -- "${BASH_SOURCE%/*}" 2>/dev/null && pwd)
 echo "Starting $SCRIPT_NAME in $SCRIPT_DIR."
 
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 LOG="${LOG:-/var/log/${SCRIPT_NAME%.sh}-${RUN_ID}.log}"
-exec &> >(sudo tee -a "/var/log/$LOG")
+# Create log file as root before redirects
+sudo touch "$LOG"
+sudo chmod 600 "$LOG"
+# Redirect ALL output to the log AND to console
+exec > >(sudo tee -a "$LOG") 2>&1
+# enable tracing
 set -x
 
 # --- Globals / Profiles ---
@@ -59,7 +64,7 @@ cleanup() {
     echo "[!] Error (exit $code) at line $line: $cmd"
     echo "[!] See log: $LOG"
   else
-    echo "[✓] Post Install finished with code $code."
+    echo "[✓] Post Install finished with $reason ($code)."
     echo "[i] Log: $LOG"
   fi
 }
@@ -213,9 +218,9 @@ esac
 
 # Configure Runtimes/DevTools Env Variables
 mise use -g uv@latest pipx@latest python@latest
-mise use -g node@latest
 mise use -g go@latest
 mise use -g rust@latest
+mise use -g node@latest
 mise use -g terraform@latest opentofu@latest terragrunt@latest
 mise use -g ansible@latest
 mise use -g helm@latest helmfile@latest
