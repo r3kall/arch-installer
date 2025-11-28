@@ -183,7 +183,7 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
     tmp="$(mktemp -d -p $TMPDIR $AUR_HELPER.XXXXXX)"
     cd "$tmp"
     git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER-bin.git
-    cd "$AUR_HELPER"
+    cd "$AUR_HELPER-bin"
     makepkg -sri --noconfirm --needed
   '
   [[ -f "/etc/${AUR_HELPER}.conf" ]] && \
