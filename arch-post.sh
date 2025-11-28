@@ -33,7 +33,7 @@ gpu_vendor()	   { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
 install_aur_packages() {
   if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
     echo "[i] Installing AUR packages from $AUR_LIST ..."
-    $AUR_HELPER $AUR_ARGS -S \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
+    $AUR_HELPER $AUR_ARGS -S $(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
     echo "[✓] Packages from $AUR_LIST installed."
   else
     echo "[!] AUR_LIST not provided or file not found."
