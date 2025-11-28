@@ -145,11 +145,15 @@ bootstrap_dotfiles() {
       git --git-dir="$DOT_DIR" remote set-url origin "$REPO_URL" || true
       git --git-dir="$DOT_DIR" fetch --all --prune
     fi
-    systemctl --user import-environment
   '
   echo "[✓] Dotfiles deployed."
 }
 bootstrap_dotfiles
+for f in "$HOME"/.config/environment.d/*.conf; do
+  [ -r "$f" ] || continue
+  # shellcheck disable=SC2046
+  export $(grep -vE '^\s*#' "$f" | xargs)
+done
 
 # --- Docker --------
 if ! command -v docker >/dev/null 2>&1; then
