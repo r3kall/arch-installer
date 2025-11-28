@@ -28,7 +28,7 @@ TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 
 WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|all|none
 DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
-ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0	
+ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0
 ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
 
 AUR_HELPER="${AUR_HELPER:-paru}"				# paru|yay
@@ -56,10 +56,10 @@ add_user_nopasswd() {
   chown root:root "$SUDOERFILE"
 
   if ! visudo -c >/dev/null; then
-	echo "[!] Sudoers config invalid, reverting." >&2
-	exit 1
+    echo "[!] Sudoers config invalid, reverting." >&2
+    exit 1
   else
-	echo "[✓] Sudoers config valid."
+	  echo "[✓] Sudoers config valid."
   fi
 }
 
@@ -72,16 +72,14 @@ remove_user_nopasswd() {
 
 install_aur_packages() {
   if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
-	echo "[i] Installing AUR packages from $AUR_LIST ..."
+    echo "[i] Installing AUR packages from $AUR_LIST ..."
     run_as_user "
-      export CARGO_HOME=\"\$XDG_DATA_HOME/cargo\"
-      export RUSTUP_HOME=\"\$XDG_DATA_HOME/rustup\"
-	  $AUR_HELPER $AUR_ARGS -S \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
-	"
-	echo "[✓] Packages from $AUR_LIST installed."
+      $AUR_HELPER $AUR_ARGS -S \$(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
+    "
+    echo "[✓] Packages from $AUR_LIST installed."
   else
-	echo "[!] AUR_LIST not provided or file not found."
-	exit 1
+    echo "[!] AUR_LIST not provided or file not found."
+    exit 1
   fi
 }
 
@@ -120,7 +118,7 @@ echo "[i] Starting Post Install ..."
 timedatectl set-ntp true
 
 # Network probe
-ping -c 1 -W 5 www.google.com >/dev/null 
+ping -c 1 -W 5 www.google.com >/dev/null
 
 # Mirror refresh (best effort)
 if ! command -v reflector >/dev/null; then pac reflector; fi
@@ -131,25 +129,29 @@ run_as_user '
 echo "[i] Upgrading full system ..."
 pacman -Syu --noconfirm
 
-# --- Core Packages --------
-echo "[i] Installing Core Packages ..."
-pac		\
-  gcc     \
-  python  \
-  rustup  \
-  go      \
-  flatpak \
-  bat     \
-  eza     \
-  fd      \
-  fzf
+# --- Dotfiles --------
+bootstrap_dotfiles() {
+  echo "[i] Bootstrapping dotfiles for ${TARGET_USER} from ${DOTFILES_REPO} ..."
+  run_as_user '
+    set -euo pipefail
+    REPO_URL="'"$DOTFILES_REPO"'"
+    DOT_DIR="'"$DOTFILES_DIR"'"
 
-run_as_user '
-  export CARGO_HOME="$XDG_DATA_HOME/cargo"
-  export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
-  rustup default stable
-'
+    if [[ ! -d "$DOT_DIR" ]]; then
+      git clone --bare "$REPO_URL" "$DOT_DIR"
+      git --git-dir="$DOT_DIR" --work-tree="$HOME" config status.showUntrackedFiles no
+    else
+      echo "[i] Dotfiles bare repo already exists at $DOT_DIR"
+      git --git-dir="$DOT_DIR" remote set-url origin "$REPO_URL" || true
+      git --git-dir="$DOT_DIR" fetch --all --prune
+    fi
+    systemctl --user import-environment
+  '
+  echo "[✓] Dotfiles deployed."
+}
+bootstrap_dotfiles
 
+# --- Docker --------
 if ! command -v docker >/dev/null 2>&1; then
   pac docker
   groupadd -f docker
@@ -161,8 +163,7 @@ if ! command -v docker >/dev/null 2>&1; then
   modprobe overlay
   sysen docker
 fi
-
-echo "[✓] Core Packages Installed."
+echo "[✓] Docker Installed."
 
 # --- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
@@ -170,27 +171,21 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   pac ccache
   sed -i 's/^#\?MAKEFLAGS=.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
   sed -i 's/^#\?BUILDENV=.*/BUILDENV=(!distcc color ccache check !sign)/' /etc/makepkg.conf
-  
+
   run_as_user '
-	set -euo pipefail
-    export CARGO_HOME="$XDG_DATA_HOME/cargo"
-    export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
-	
-	TMPDIR="${TMPDIR:-/var/tmp}"
-	AUR_HELPER="'"$AUR_HELPER"'"
+    set -euo pipefail
+    TMPDIR="${TMPDIR:-/var/tmp}"
+    AUR_HELPER="'"$AUR_HELPER"'"
     tmp="$(mktemp -d -p $TMPDIR $AUR_HELPER.XXXXXX)"
-	cd "$tmp"
-	git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
-	cd "$AUR_HELPER"
-	makepkg -sri --noconfirm --needed 
+    cd "$tmp"
+    git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER-bin.git
+    cd "$AUR_HELPER"
+    makepkg -sri --noconfirm --needed
   '
   [[ -f "/etc/${AUR_HELPER}.conf" ]] && \
     sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
-  
-  echo "[✓] AUR Helper Installed."
-else
-  echo "[i] ${AUR_HELPER} already present."
 fi
+echo "[✓] AUR Helper Installed."
 
 # --- Install Common AUR packages list --------
 AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
@@ -206,14 +201,14 @@ run_as_user '
   mkdir -p "$XDG_CACHE_HOME/zsh" || true
 '
 
-run_as_user '
-  eval "$(fnm env --shell bash)"
-  fnm install --lts
-  fnm default lts-latest
-  corepack enable || true
-  # optional: common global tools
-  # npm -g install typescript eslint yarn pnpm || true
-'
+# run_as_user '
+#   eval "$(fnm env --shell bash)"
+#   fnm install --lts
+#   fnm default lts-latest
+#   corepack enable || true
+#   # optional: common global tools
+#   # npm -g install typescript eslint yarn pnpm || true
+# '
 
 # --- Bluetooth --------
 if [[ "$ENABLE_BLUETOOTH" == "1" ]]; then
@@ -243,7 +238,6 @@ case "$WINDOW_MANAGER" in
 	;;
   *)
 	echo "[!] Invalid Window Manager." >&2
-	exit 1
 	;;
 esac
 
@@ -260,30 +254,16 @@ case "$DISPLAY_MANAGER" in
 	;;
   *)
 	echo "[!] Invalid Display Manager." >&2
-	exit 1
 	;;
 esac
 
-#flatpak install -y --noninteractive flathub com.spotify.Client
-#flatpak install -y --noninteractive flathub com.visualstudio.code
-
-bootstrap_dotfiles() {
-  echo "[i] Bootstrapping dotfiles for ${TARGET_USER} from ${DOTFILES_REPO} ..."
-  run_as_user '
-    set -euo pipefail
-    REPO_URL="'"$DOTFILES_REPO"'"
-    DOT_DIR="'"$DOTFILES_DIR"'"
-
-    if [[ ! -d "$DOT_DIR" ]]; then
-      git clone --bare "$REPO_URL" "$DOT_DIR"
-      git --git-dir="$DOT_DIR" --work-tree="$HOME" config status.showUntrackedFiles no
-    else
-      echo "[i] Dotfiles bare repo already exists at $DOT_DIR"
-      git --git-dir="$DOT_DIR" remote set-url origin "$REPO_URL" || true
-      git --git-dir="$DOT_DIR" fetch --all --prune
-    fi
-  '
-  echo "[✓] Dotfiles deployed."
-}
-bootstrap_dotfiles
-
+# Configure Runtimes/DevTools Env Variables
+run_as_user '
+  mise use -g uv@latest pipx@latest python@latest
+  mise use -g node@latest
+  mise use -g go@latest
+  mise use -g rust@latest
+  mise use -g terraform@latest opentofu@latest terragrunt@latest
+  mise use -g ansible@latest
+  mise use -g helm@latest helmfile@latest
+'

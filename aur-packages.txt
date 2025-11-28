@@ -1,6 +1,7 @@
 # ---- Common AUR package list (one per line) ----
 # Wayland core
 wayland
+gtk3
 gtk4
 qt5-base
 qt5-declarative
@@ -23,7 +24,7 @@ ttf-hack
 ttf-hack-nerd
 
 # Terminal
-kitty
+ghostty
 foot
 zsh
 starship
@@ -38,8 +39,6 @@ pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
-pavucontrol
-pulsemixer
 
 # Video
 ffmpeg
@@ -66,11 +65,11 @@ swww
 rofi-wayland
 
 # Nvim
-neovim
-bash-language-server
-lua-language-server
+#neovim
+#bash-language-server
+#lua-language-server
 #pyright
-gopls
+#gopls
 #rust-analyzer
 
 # PDF
@@ -89,3 +88,6 @@ resvg
 imagemagick
 wl-clipboard
 yazi
+
+# Web
+firefox

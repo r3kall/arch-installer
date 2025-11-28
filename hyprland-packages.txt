@@ -12,6 +12,5 @@ hypridle
 hyprlock
 hyprpicker
 hyprsunset
-xdg-desktop-portal-hyprland
 hyprpolkitagent
 hyprland
