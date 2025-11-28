@@ -96,11 +96,14 @@ bootstrap_dotfiles() {
 }
 bootstrap_dotfiles
 
+shopt -s nullglob
+set -a
 for f in "$HOME"/.config/environment.d/*.conf; do
   [ -r "$f" ] || continue
   # shellcheck disable=SC2046
-  export $(grep -vE '^\s*#' "$f" | xargs)
+  . "$f"
 done
+set +a
 env | grep EDITOR
 
 # --- Docker --------
