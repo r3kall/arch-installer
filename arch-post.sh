@@ -83,7 +83,7 @@ sudo pacman -Syu --noconfirm
 # --- Dotfiles --------
 bootstrap_dotfiles() {
   echo "[i] Bootstrapping dotfiles for ${TARGET_USER} from ${DOTFILES_REPO} ..."
-  if [[ ! -d "$DOT_DIR" ]]; then
+  if [[ ! -d "$DOTFILES_DIR" ]]; then
     git clone --bare "$DOTFILES_REPO" "$DOTFILES_DIR"
     git --git-dir="$DOTFILES_DIR" --work-tree="$HOME" config status.showUntrackedFiles no
   else
