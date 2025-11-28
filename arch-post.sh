@@ -45,7 +45,9 @@ gpu_vendor()	 { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
 
 add_user_nopasswd() {
   echo "[i] Adding temp sudoers permission to user $TARGET_USER ..."
-  echo "$TARGET_USER ALL=(ALL) NOPASSWD:ALL" | tee "$SUDOERFILE"
+  cat >"$SUDOERFILE" <<EOF
+$TARGET_USER ALL=(ALL) NOPASSWD:ALL
+EOF
   chmod 440 "$SUDOERFILE"
   chown root:root "$SUDOERFILE"
 

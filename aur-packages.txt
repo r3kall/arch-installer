@@ -77,7 +77,8 @@ file
 zathura
 zathura-pdf-mupdf
 
-# File Utils
+# Utils
+mise
 jq
 yq
 fd
