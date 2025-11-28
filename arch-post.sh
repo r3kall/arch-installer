@@ -19,13 +19,7 @@ exec > >(tee -a "$LOG") 2>&1
 
 # --- Globals / Profiles ---
 TARGET_USER="${TARGET_USER:-${SUDO_USER:-}}"
-if [[ -z "${TARGET_USER}" || "${TARGET_USER}" == "root" ]]; then
-  read -rp "Enter target username: " TARGET_USER
-fi
-
-TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-: "${TARGET_HOME:?User home not found}"
-
+TARGET_HOME="${TARGET_HOME:-${SUDO_HOME:-}}"
 WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|all|none
 DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
 ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0
@@ -51,7 +45,7 @@ gpu_vendor()	 { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
 
 add_user_nopasswd() {
   echo "[i] Adding temp sudoers permission to user $TARGET_USER ..."
-  echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" | tee "$SUDOERFILE"
+  echo "$TARGET_USER ALL=(ALL) NOPASSWD:ALL" | tee "$SUDOERFILE"
   chmod 440 "$SUDOERFILE"
   chown root:root "$SUDOERFILE"
 

@@ -7,7 +7,6 @@ hyprwayland-scanner
 aquamarine
 hyprgraphics
 hyprland-qt-support
-hyprland-qtutils
 hypridle
 hyprlock
 hyprpicker
