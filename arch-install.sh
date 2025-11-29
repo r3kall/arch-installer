@@ -41,6 +41,22 @@ partitioning () {
 }
 
 system_install () {
+  # Update mirrors
+  # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
+  reflector -c Italy,Germany,France -l 16 -p https --save /etc/pacman.d/mirrorlist
+  sleep 8
+
+  # Install essential packages
+  pacstrap /mnt base base-devel
+  sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
+  sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
+
+  # Generate an fstab file
+  # genfstab -U /mnt >> /mnt/etc/fstab
+
+  # Set root password
+  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | ch passwd
+
   ## Timezone settings
   ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
   echo ${TIMEZONE} > /mnt/etc/timezone
@@ -65,22 +81,9 @@ system_install () {
   echo "ff02::1           ip6-allnodes" >> /mnt/etc/hosts
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
 
-  # Update mirrors
-  # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector -c Italy,Germany,France -l 16 -p https --save /etc/pacman.d/mirrorlist
-  sleep 8
-
-  # Install essential packages
+  pacstrap /mnt linux linux-headers
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  pacstrap /mnt base base-devel linux linux-headers
-  # !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
   if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
-  
-  # Set root password
-  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | ch passwd
-
-  sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
-  sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
 
   ## Install tools
   pac archlinux-keyring
@@ -172,11 +175,11 @@ user_install() {
   # hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
   local VIRT_KIND="$(virt_what)"
   if is_virtualized; then
-    pac qemu-guest-agent spice-vdagent
-    ch systemctl enable qemu-guest-agent
-    echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
+	pac qemu-guest-agent spice-vdagent
+	ch systemctl enable qemu-guest-agent
+	echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
   else
-	  echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
+	echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
   fi
   sl
 }
