@@ -115,18 +115,18 @@ set +a
 env | grep TERM
 
 # --- Docker --------
-if ! command -v docker >/dev/null 2>&1; then
-  pac docker
-  sudo groupadd -f docker
-  sudo usermod -aG docker $TARGET_USER
+# if ! command -v docker >/dev/null 2>&1; then
+#   pac docker
+#   sudo groupadd -f docker
+#   sudo usermod -aG docker $TARGET_USER
 
-  # Enable native overlay diff engine
-  echo "options overlay metacopy=off redirect_dir=off" | sudo tee /etc/modprobe.d/disable-overlay-redirect-dir.conf >/dev/null
-  sudo modprobe -r overlay
-  sudo modprobe overlay
-  sysen docker
-fi
-echo "[✓] Docker Installed."
+#   # Enable native overlay diff engine
+#   echo "options overlay metacopy=off redirect_dir=off" | sudo tee /etc/modprobe.d/disable-overlay-redirect-dir.conf >/dev/null
+#   sudo modprobe -r overlay
+#   sudo modprobe overlay
+#   sysen docker
+# fi
+# echo "[✓] Docker Installed."
 
 # --- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then

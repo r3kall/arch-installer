@@ -79,6 +79,7 @@ zathura
 zathura-pdf-mupdf
 
 # Utils
+podman
 mise
 bat
 eza
