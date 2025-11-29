@@ -130,7 +130,7 @@ initramfs() {
 
 # Boot loader - GRUB
 bootloader_grub() {
-  pac dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub
+  pac dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub btrfs-progs
   ch grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
   ch grub-mkconfig -o /boot/grub/grub.cfg
   sl
