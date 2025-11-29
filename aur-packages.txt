@@ -55,6 +55,7 @@ slurp
 # Notify/Panels
 libnotify
 gvfs
+gvfs-mtp
 swaync
 waybar
 
@@ -92,7 +93,9 @@ zoxide
 resvg
 imagemagick
 wl-clipboard
+cliphist
 yazi
+thunar
 
 # Web
 firefox

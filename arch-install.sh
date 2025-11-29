@@ -48,7 +48,7 @@ system_install () {
 
   # Install essential packages
   # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  pacstrap /mnt base base-devel linux-lts linux-lts-headers
+  pacstrap /mnt base base-devel linux linux-headers
   # !(hostnamectl | grep Virtualization) && pacstrap /mnt linux-firmware
   if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
 
@@ -99,7 +99,7 @@ system_install () {
   
   # GPU drivers
   if lspci | grep -E "VGA|3D|Display" | grep -qi nvidia; then
-    pac nvidia-lts nvidia-utils
+    pac nvidia nvidia-utils
   elif lspci | grep -E "VGA|3D|Display" | grep -qi intel; then
     pac mesa vulkan-intel intel-media-driver
   elif lspci | grep -E "VGA|3D|Display" | grep -qi amd; then
@@ -149,8 +149,8 @@ bootloader_bootctl() {
 
   printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
   # Change ucode if needed
-  printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
-  printf "title   Arch Linux\nlinux   /vmlinuz-linux-lts\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-lts-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
+  printf "title   Arch Linux\nlinux   /vmlinuz-linux\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
+  printf "title   Arch Linux\nlinux   /vmlinuz-linux\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
   ch bootctl status
   sl
 }
