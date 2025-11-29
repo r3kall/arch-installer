@@ -115,6 +115,8 @@ partition_disk() {
 
   echo "== Creating GPT and partitions on $DISK =="
   # Wipe and create new GPT
+  wipefs -a "$DISK"
+  partprobe "$DISK" || true
   parted -s "$DISK" mklabel gpt
 
   # 1MiB alignment, 1GiB EFI
@@ -123,6 +125,7 @@ partition_disk() {
 
   # Root from 1GiB to alloc_percent% of disk
   parted -s "$DISK" mkpart ROOT "${FS_TYPE}" 1025MiB "${alloc_percent}%"
+  partprobe "$DISK" || true
 
   partpref="$(part_prefix "$DISK")"
   ESP="${partpref}1"
@@ -146,6 +149,10 @@ setup_ext4_mounts() {
   mount "$ROOT" /mnt
   mkdir -p /mnt/boot
   mount "$ESP" /mnt/boot
+
+  echo "== Generating /mnt/etc/fstab via genfstab =="
+  mkdir -p /mnt/etc
+  genfstab -U /mnt > /mnt/etc/fstab
 }
 
 create_btrfs_subvolumes() {
@@ -169,13 +176,11 @@ create_btrfs_subvolumes() {
 setup_btrfs_mounts() {
   echo "== Mounting Btrfs subvolumes =="
 
-  local base_opts="noatime,space_cache=v2,discard=async"
-  local ssd_opts="ssd"
-  local comp_opts="compress=zstd:3"
-  local adf_opts="autodefrag"
+  local BASE_OPTS="noatime,ssd,space_cache=v2,discard=async"
+  local COMPRESS="compress=zstd:3"
 
   # Root (@) with compression + autodefrag
-  mount -o "subvol=@,$base_opts,$ssd_opts,$comp_opts,$adf_opts" "$ROOT" /mnt
+  mount -o "subvol=@,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt
 
   mkdir -p \
     /mnt/boot \
@@ -189,31 +194,59 @@ setup_btrfs_mounts() {
     /mnt/.snapshots
 
   # Home: similar to root
-  mount -o "subvol=@home,$base_opts,$ssd_opts,$comp_opts,$adf_opts" \
-    "$ROOT" /mnt/home
+  mount -o "subvol=@home,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/home
 
-  # pkg/log/cache/tmp: no compression, no autodefrag (lots of churn, big files)
-  mount -o "subvol=@pkg,$base_opts,$ssd_opts" \
-    "$ROOT" /mnt/var/cache/pacman/pkg
-  mount -o "subvol=@log,$base_opts,$ssd_opts" \
-    "$ROOT" /mnt/var/log
-  mount -o "subvol=@cache,$base_opts,$ssd_opts" \
-    "$ROOT" /mnt/var/cache
-  mount -o "subvol=@tmp,$base_opts,$ssd_opts" \
-    "$ROOT" /mnt/var/tmp
+  # pkg/log/cache/tmp
+  mount -o "subvol=@pkg,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/cache/pacman/pkg
+  mount -o "subvol=@log,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/log
+  mount -o "subvol=@cache,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/cache
+  mount -o "subvol=@tmp,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/tmp
 
   # vm/containers: no-COW via nodatacow, and no compression
-  mount -o "subvol=@vm,$base_opts,$ssd_opts,nodatacow" \
-    "$ROOT" /mnt/var/lib/vm
-  mount -o "subvol=@containers,$base_opts,$ssd_opts,nodatacow" \
-    "$ROOT" /mnt/var/lib/containers
+  mount -o "subvol=@vm,${BASE_OPTS},nodatacow" "$ROOT" /mnt/var/lib/vm
+  mount -o "subvol=@containers,${BASE_OPTS},nodatacow" "$ROOT" /mnt/var/lib/containers
 
-  # snapshots: compressed + autodefrag
-  mount -o "subvol=@snapshots,$base_opts,$ssd_opts,$comp_opts,$adf_opts" \
-    "$ROOT" /mnt/.snapshots
+  # snapshots
+  mount -o "subvol=@snapshots,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/.snapshots
 
   # EFI
   mount "$ESP" /mnt/boot
+
+  echo "== Applying chattr +C (NOCOW attribute) to VM/containers directories =="
+  # This ensures future files inside these directories are created without COW,
+  # complementing the nodatacow mount options.
+  for d in /mnt/var/lib/vm /mnt/var/lib/containers; do
+    if [[ -d "$d" ]]; then
+      if ! chattr +C "$d"; then
+        echo "WARNING: failed to set NOCOW (chattr +C) on $d" >&2
+      fi
+    fi
+  done
+
+  echo "== Generating /mnt/etc/fstab for Btrfs layout =="
+  mkdir -p /mnt/etc
+
+  local ESP_UUID ROOT_UUID
+  ESP_UUID=$(blkid -s UUID -o value "$ESP")
+  ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
+
+  cat > /mnt/etc/fstab <<EOF
+# /etc/fstab
+
+# EFI System Partition
+UUID=${ESP_UUID}  /boot         vfat    umask=0077                               0  2
+
+# Btrfs root and subvolumes
+UUID=${ROOT_UUID}  /             btrfs   ${BASE_OPTS},${COMPRESS},subvol=@          0  0
+UUID=${ROOT_UUID}  /home         btrfs   ${BASE_OPTS},${COMPRESS},subvol=@home      0  0
+UUID=${ROOT_UUID}  /var/cache/pacman/pkg  btrfs   ${BASE_OPTS},${COMPRESS},subvol=@pkg           0  0
+UUID=${ROOT_UUID}  /var/log      btrfs   ${BASE_OPTS},${COMPRESS},subvol=@log                    0  0
+UUID=${ROOT_UUID}  /var/cache    btrfs   ${BASE_OPTS},${COMPRESS},subvol=@cache                  0  0
+UUID=${ROOT_UUID}  /var/tmp      btrfs   ${BASE_OPTS},${COMPRESS},subvol=@tmp                    0  0
+UUID=${ROOT_UUID}  /var/lib/vm   btrfs   ${BASE_OPTS},nodatacow,subvol=@vm                       0  0
+UUID=${ROOT_UUID}  /var/lib/containers  btrfs   ${BASE_OPTS},nodatacow,subvol=@containers        0  0
+UUID=${ROOT_UUID}  /.snapshots   btrfs   ${BASE_OPTS},${COMPRESS},subvol=@snapshots 0  0
+EOF
 }
 
 print_summary() {
@@ -229,7 +262,7 @@ print_summary() {
     cat <<EOF
 Recommended /etc/fstab Btrfs options (already used for initial mounts):
 
-  root (@):      ${base_opts:-noatime,space_cache=v2,discard=async},ssd,compress=zstd:3,autodefrag
+  root (@):      ${base_opts:-noatime,space_cache=v2,discard=async},ssd,compress=zstd:3
   /home (@home): same as root
   pkg/log/cache/tmp: noatime,space_cache=v2,discard=async,ssd
   vm/containers: noatime,space_cache=v2,discard=async,ssd,nodatacow

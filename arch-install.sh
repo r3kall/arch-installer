@@ -56,7 +56,7 @@ system_install () {
   sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
 
   # Generate an fstab file
-  genfstab -U /mnt >> /mnt/etc/fstab
+  # genfstab -U /mnt >> /mnt/etc/fstab
 
   # Set root password
   ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | ch passwd
@@ -106,15 +106,6 @@ system_install () {
     pac mesa vulkan-radeon libva-mesa-driver
   else
     pac mesa
-  fi
-
-  # Optional Swapfile
-  if [[ "$SWAP_SIZE_GB" != "0" ]]; then
-    ch fallocate -l "${SWAP_SIZE_GB}G" /swapfile
-    ch chmod 600 /swapfile
-    ch mkswap /swapfile
-    ch swapon /swapfile
-    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
   fi
 
   sl
