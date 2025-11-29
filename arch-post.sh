@@ -104,14 +104,9 @@ bootstrap_dotfiles() {
 }
 bootstrap_dotfiles
 
-shopt -s nullglob
-set -a
-for f in "$HOME"/.config/environment.d/*.conf; do
-  [ -r "$f" ] || continue
-  # shellcheck disable=SC2046
-  . "$f"
-done
-set +a
+if [[ -f "$HOME/.config/shell/env.sh" ]]; then
+  source "$HOME/.config/shell/env.sh"
+fi
 env | grep TERM
 
 # --- Docker --------
