@@ -231,11 +231,12 @@ setup_btrfs_mounts() {
   ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
 
   cat > /mnt/etc/fstab <<EOF
-# /etc/fstab
+# Static information about the filesystems.
+# See fstab(5) for details.
 
+# <file system> <dir> <type> <options> <dump> <pass>
 # EFI System Partition
 UUID=${ESP_UUID}  /boot         vfat    umask=0077                               0  2
-
 # Btrfs root and subvolumes
 UUID=${ROOT_UUID}  /             btrfs   ${BASE_OPTS},${COMPRESS},subvol=@          0  0
 UUID=${ROOT_UUID}  /home         btrfs   ${BASE_OPTS},${COMPRESS},subvol=@home      0  0
