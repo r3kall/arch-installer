@@ -47,7 +47,10 @@ system_install () {
   sleep 8
 
   # Install essential packages
-  pacstrap /mnt base base-devel
+  # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
+  pacstrap /mnt base base-devel linux linux-headers
+  if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
+
   sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
   sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
 
@@ -81,10 +84,6 @@ system_install () {
   echo "ff02::1           ip6-allnodes" >> /mnt/etc/hosts
   echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
 
-  pacstrap /mnt linux linux-headers
-  # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
-
   ## Install tools
   pac archlinux-keyring
   pac linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
@@ -103,7 +102,7 @@ system_install () {
   elif lspci | grep -E "VGA|3D|Display" | grep -qi intel; then
     pac mesa vulkan-intel intel-media-driver
   elif lspci | grep -E "VGA|3D|Display" | grep -qi amd; then
-    pac mesa vulkan-radeon libva-mesa-driver
+    pac mesa vulkan-radeon libva-mesa-driver mesa-vdpau
   else
     pac mesa
   fi
@@ -175,11 +174,11 @@ user_install() {
   # hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
   local VIRT_KIND="$(virt_what)"
   if is_virtualized; then
-	pac qemu-guest-agent spice-vdagent
-	ch systemctl enable qemu-guest-agent
-	echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
+    pac qemu-guest-agent spice-vdagent
+    ch systemctl enable qemu-guest-agent
+    echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
   else
-	echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
+	  echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
   fi
   sl
 }
