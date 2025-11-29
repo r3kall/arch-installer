@@ -40,6 +40,7 @@ zsh-history-substring-search
 pipewire
 wireplumber
 pipewire-pulse
+pavucontrol
 
 # Video
 ffmpeg

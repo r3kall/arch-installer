@@ -215,7 +215,7 @@ esac
 mise use -g uv@latest pipx@latest python@latest
 mise use -g go@latest
 mise use -g rust@latest
-mise use -g node@latest
+#mise use -g node@latest
 mise use -g terraform@latest opentofu@latest terragrunt@latest
 mise use -g ansible@latest
-mise use -g helm@latest helmfile@latest
+#mise use -g helm@latest helmfile@latest

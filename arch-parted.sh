@@ -118,11 +118,11 @@ partition_disk() {
   parted -s "$DISK" mklabel gpt
 
   # 1MiB alignment, 1GiB EFI
-  parted -s "$DISK" mkpart ESP fat32 1MiB 1GiB
+  parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
   parted -s "$DISK" set 1 esp on
 
   # Root from 1GiB to alloc_percent% of disk
-  parted -s "$DISK" mkpart ROOT "${FS_TYPE}" 1GiB "${alloc_percent}%"
+  parted -s "$DISK" mkpart ROOT "${FS_TYPE}" 1025MiB "${alloc_percent}%"
 
   partpref="$(part_prefix "$DISK")"
   ESP="${partpref}1"
