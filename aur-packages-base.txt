@@ -1,20 +1,4 @@
 # ---- Common AUR package list (one per line) ----
-# Wayland core
-wayland
-wayland-protocols
-gtk3
-gtk4
-qt5-base
-qt5-declarative
-qt5-wayland
-qt6-base
-qt6-declarative
-qt6-wayland
-xdg-desktop-portal
-polkit
-uwsm
-libnewt
-xorg-xwayland
 
 # Fonts/Icons
 noto-fonts
@@ -44,39 +28,10 @@ pipewire-pulse
 pipewire-alsa
 pipewire-jack
 wireplumber
-gst-plugin-pipewire
 
 # Video
 ffmpeg
 gstreamer
-gst-libav
-gst-plugin-pipewire
-vlc
-
-# Screenshot
-grim
-slurp
-
-# Notify/Panels
-libnotify
-gvfs
-gvfs-mtp
-swaync
-waybar
-
-# Theme / Wallpaper
-matugen-bin
-swww
-
-# Launchers
-rofi-wayland
-
-# Nvim
-
-# PDF
-file
-zathura
-zathura-pdf-mupdf
 
 # Utils
 gcc
@@ -92,15 +47,10 @@ fzf
 zoxide
 resvg
 imagemagick
-wl-clipboard
-cliphist
 neovim
 tree-sitter-cli
 lazygit
-yazi
 btop
-thunar
 
 # Web
 firefox
-

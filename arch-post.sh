@@ -18,8 +18,8 @@ set -x
 # --- Globals / Profiles ---
 TARGET_USER="${TARGET_USER:-${USER:-}}"
 TARGET_HOME="${TARGET_HOME:-${HOME:-}}"
-WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|all|none
-DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# greetd|sddm|ly|none
+WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|cosmic|none
+DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# sddm|ly|none
 ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0
 ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
 
@@ -133,8 +133,8 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
   TMPDIR="${TMPDIR:-/var/tmp}"
   tmp="$(mktemp -d -p $TMPDIR $AUR_HELPER.XXXXXX)"
   cd "$tmp"
-  git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER-bin.git
-  cd "$AUR_HELPER-bin"
+  git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
+  cd "$AUR_HELPER"
   makepkg -sri --noconfirm --needed
 
   [[ -f "/etc/${AUR_HELPER}.conf" ]] && \
@@ -142,51 +142,25 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 fi
 echo "[✓] AUR Helper Installed."
 
-# --- Install Common AUR packages list --------
-AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
-
-# --- SHELL config ---
-# zsh as default shell for the user (no password prompt)
-# TODO: parametric shell
-# if command -v zsh >/dev/null 2>&1; then
-# chsh -s "$(run_as_user 'command -v zsh')" "$TARGET_USER" || true
-
-fc-cache -f
-chsh -s $(command -v zsh) || true
-mkdir -p "$XDG_CACHE_HOME/zsh" || true
-
-# run_as_user '
-#   eval "$(fnm env --shell bash)"
-#   fnm install --lts
-#   fnm default lts-latest
-#   corepack enable || true
-#   # optional: common global tools
-#   # npm -g install typescript eslint yarn pnpm || true
-# '
-
-# --- Bluetooth --------
-if [[ "$ENABLE_BLUETOOTH" == "1" ]]; then
-  pac bluez bluez-utils blueman
-  sysen bluetooth
-fi
-
-# --- Printing --------
-if [[ "$ENABLE_CUPS" == "1" ]]; then
-  pac cups cups-pdf system-config-printer
-  sysen cups
-fi
-
 echo "WM: $WINDOW_MANAGER"
 # --- Window Manager -------
 case "$WINDOW_MANAGER" in
   "hyprland")
 	echo "[i] Installing Hyprland ..."
+  AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
 	AUR_LIST="$SCRIPT_DIR/hyprland-packages.txt" install_aur_packages
 	;;
   "wayfire")
 	echo "[i] Installing Wayfire ..."
+  AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
 	AUR_LIST="$SCRIPT_DIR/wayfire-packages.txt" install_aur_packages
 	;;
+  "cosmic")
+  echo "[i] Installing Cosmic ..."
+  AUR_LIST="$SCRIPT_DIR/aur-packages-base.txt" install_aur_packages
+  $AUR_HELPER $AUR_ARGS -S cosmic-session-git cosmic-player-git dconf
+  sysen cosmic-greeter.service
+  ;;
   "none")
 	echo "[i] Skip Window Manager installation ..."
 	;;
@@ -211,11 +185,42 @@ case "$DISPLAY_MANAGER" in
 	;;
 esac
 
+# --- SHELL config ---
+# zsh as default shell for the user (no password prompt)
+# TODO: parametric shell
+# if command -v zsh >/dev/null 2>&1; then
+# chsh -s "$(run_as_user 'command -v zsh')" "$TARGET_USER" || true
+
+fc-cache -f
+chsh -s $(command -v zsh) || true
+mkdir -p "$XDG_CACHE_HOME/zsh" || true
+
+# run_as_user '
+#   eval "$(fnm env --shell bash)"
+#   fnm install --lts
+#   fnm default lts-latest
+#   corepack enable || true
+#   # optional: common global tools
+#   # npm -g install typescript eslint yarn pnpm || true
+# '
+
+# --- Bluetooth --------
+if [[ "$ENABLE_BLUETOOTH" == "1" ]]; then
+  $AUR_HELPER $AUR_ARGS -S bluez bluez-utils blueman
+  sysen bluetooth
+fi
+
+# --- Printing --------
+if [[ "$ENABLE_CUPS" == "1" ]]; then
+  $AUR_HELPER $AUR_ARGS -S cups cups-pdf system-config-printer
+  sysen cups
+fi
+
 # Configure Runtimes/DevTools Env Variables
 mise use -g uv@latest pipx@latest python@latest
 mise use -g go@latest
 mise use -g rust@latest
 #mise use -g node@latest
-mise use -g terraform@latest opentofu@latest terragrunt@latest
-mise use -g ansible@latest
+#mise use -g terraform@latest opentofu@latest terragrunt@latest
+#mise use -g ansible@latest
 #mise use -g helm@latest helmfile@latest

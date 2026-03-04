@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Arch disk partitioner + (optional) Btrfs layout
+# Arch disk partitioner
 #
 # Features:
-# - GPT with EFI System Partition (1GiB) + single Linux partition
-# - Keeps a fraction of disk unallocated (default 15%)
-# - ext4 or Btrfs root (flag: --fs ext4|btrfs)
+# - GPT with EFI System Partition (1GiB)
+# - Keeps a fraction of disk unallocated (default 10%)
+# - ext4 layout: single root partition
 # - Btrfs layout:
 #     @           -> /
 #     @home       -> /home
@@ -24,15 +24,15 @@ set -euo pipefail
 #   - pkg/log/cache/tmp: + ssd (no autodefrag, no compression)
 #   - vm/containers: noatime,space_cache=v2,discard=async,ssd,nodatacow
 #
-# Swap is expected to be a swapfile created later.
+# No Swap (swapfile may be created later).
 
 SCRIPT_NAME="${0##*/}"
 
 DISK=""
 ESP_LABEL="EFI"
 ROOT_LABEL="root"
-FS_TYPE="btrfs"         # default filesystem
-RESERVE_PERCENT=15      # % of disk left unallocated at the end
+FS_TYPE="ext4" 
+RESERVE_PERCENT=10
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -49,11 +49,6 @@ Options:
   -r, --reserve PERCENT    Percent of disk to leave unallocated (default: 15)
   -y, --yes                Do not prompt for confirmation
   -h, --help               Show this help
-
-Notes:
-  - Creates 1GiB EFI System Partition.
-  - No swap partition (use a swapfile later if desired).
-  - For Btrfs, creates subvolume layout optimized for SSD and snapshots.
 EOF
 }
 
@@ -110,7 +105,7 @@ confirm() {
 
 partition_disk() {
   local alloc_percent=$((100 - RESERVE_PERCENT))
-  (( alloc_percent > 0 && alloc_percent < 100 )) \
+  (( alloc_percent > 0 && alloc_percent <= 100 )) \
     || die "Invalid reserve percent: $RESERVE_PERCENT"
 
   echo "== Creating GPT and partitions on $DISK =="
