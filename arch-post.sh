@@ -158,7 +158,7 @@ case "$WINDOW_MANAGER" in
   "cosmic")
   echo "[i] Installing Cosmic ..."
   AUR_LIST="$SCRIPT_DIR/aur-packages-base.txt" install_aur_packages
-  $AUR_HELPER $AUR_ARGS -S cosmic-session-git cosmic-player-git dconf
+  $AUR_HELPER $AUR_ARGS -S cosmic-session cosmic-player cosmic-wallpapers dconf
   sysen cosmic-greeter.service
   ;;
   "none")
