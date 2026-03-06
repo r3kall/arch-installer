@@ -1,0 +1,9 @@
+# ---- Hyprland packages ----
+dconf
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+polkit-gnome
+gnome-keyring
+niri
+xwayland-satellite
+mako

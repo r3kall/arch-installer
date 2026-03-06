@@ -7,8 +7,8 @@ set -euo pipefail
 
 
 # ===== User variables =====
-USERNAME="${USERNAME:-arch}"
-HOSTNAME="${HOSTNAME:-linux}"
+USER_NAME="${USER_NAME:-arch}"
+HOST_NAME="${HOST_NAME:-linux}"
 ROOT_PASSWORD="${ROOT_PASSWORD:-root}"
 USER_PASSWORD="${USER_PASSWORD:-admin}"
 TIMEZONE="${TIMEZONE:-Europe/Rome}"
@@ -75,7 +75,7 @@ system_install () {
   ch locale-gen
 
   # Create the hostname file
-  echo $HOSTNAME > /mnt/etc/hostname
+  echo $HOST_NAME > /mnt/etc/hostname
   # Add matching entries to hosts
   echo "# The following lines are desirable for IPv4 capable hosts" >> /mnt/etc/hosts
   echo "127.0.0.1         localhost" >> /mnt/etc/hosts
@@ -149,14 +149,14 @@ bootloader_bootctl() {
 user_install() {
   echo "Starting user installation."
   # Add a new user, create its home directory and add it to the indicated groups
-  ch useradd -mG wheel,uucp,input,optical,storage,network ${USERNAME}
+  ch useradd -mG wheel,uucp,input,optical,storage,network ${USER_NAME}
 
   # Add sudoer privileges
   # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
   echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
   ch chmod 440 /etc/sudoers.d/10-wheel
   # Set user password
-  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | ch passwd ${USERNAME}
+  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | ch passwd ${USER_NAME}
 
   pac xdg-user-dirs xdg-utils
   printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults

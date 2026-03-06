@@ -107,21 +107,6 @@ bootstrap_dotfiles
 if [[ -f "$HOME/.config/shell/env.sh" ]]; then
   source "$HOME/.config/shell/env.sh"
 fi
-env | grep TERM
-
-# --- Docker --------
-# if ! command -v docker >/dev/null 2>&1; then
-#   pac docker
-#   sudo groupadd -f docker
-#   sudo usermod -aG docker $TARGET_USER
-
-#   # Enable native overlay diff engine
-#   echo "options overlay metacopy=off redirect_dir=off" | sudo tee /etc/modprobe.d/disable-overlay-redirect-dir.conf >/dev/null
-#   sudo modprobe -r overlay
-#   sudo modprobe overlay
-#   sysen docker
-# fi
-# echo "[✓] Docker Installed."
 
 # --- Install AUR helper --------
 if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
@@ -142,25 +127,27 @@ if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
 fi
 echo "[✓] AUR Helper Installed."
 
+AUR_LIST="$SCRIPT_DIR/pkgs-base.txt" install_aur_packages
+fc-cache -f
+chsh -s "/usr/bin/zsh" || true
+mkdir -p "$XDG_CACHE_HOME/zsh" || true
+
+dw_shell() {
+  $AUR_HELPER $AUR_ARGS -S noctalia-shell cava cliphist wlsunset matugen
+}
+
 echo "WM: $WINDOW_MANAGER"
 # --- Window Manager -------
 case "$WINDOW_MANAGER" in
   "hyprland")
 	echo "[i] Installing Hyprland ..."
-  AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
-	AUR_LIST="$SCRIPT_DIR/hyprland-packages.txt" install_aur_packages
+  AUR_LIST="$SCRIPT_DIR/pkgs-hyprland.txt" install_aur_packages
 	;;
-  "wayfire")
-	echo "[i] Installing Wayfire ..."
-  AUR_LIST="$SCRIPT_DIR/aur-packages.txt" install_aur_packages
-	AUR_LIST="$SCRIPT_DIR/wayfire-packages.txt" install_aur_packages
+  "niri")
+	echo "[i] Installing Niri ..."
+	AUR_LIST="$SCRIPT_DIR/pkgs-niri.txt" install_aur_packages
+  dw_shell
 	;;
-  "cosmic")
-  echo "[i] Installing Cosmic ..."
-  AUR_LIST="$SCRIPT_DIR/aur-packages-base.txt" install_aur_packages
-  $AUR_HELPER $AUR_ARGS -S cosmic-session cosmic-player cosmic-wallpapers dconf
-  sysen cosmic-greeter.service
-  ;;
   "none")
 	echo "[i] Skip Window Manager installation ..."
 	;;
@@ -178,31 +165,27 @@ case "$DISPLAY_MANAGER" in
 	;;
   "ly")
 	pac ly
-	sysen ly
+	sysen ly@tty2.service
+  sudo systemctl disable getty@tty2.service
 	;;
   *)
 	echo "[!] Invalid Display Manager." >&2
 	;;
 esac
 
-# --- SHELL config ---
-# zsh as default shell for the user (no password prompt)
-# TODO: parametric shell
-# if command -v zsh >/dev/null 2>&1; then
-# chsh -s "$(run_as_user 'command -v zsh')" "$TARGET_USER" || true
+# --- Docker --------
+# if ! command -v docker >/dev/null 2>&1; then
+#   pac docker
+#   sudo groupadd -f docker
+#   sudo usermod -aG docker $TARGET_USER
 
-fc-cache -f
-chsh -s $(command -v zsh) || true
-mkdir -p "$XDG_CACHE_HOME/zsh" || true
-
-# run_as_user '
-#   eval "$(fnm env --shell bash)"
-#   fnm install --lts
-#   fnm default lts-latest
-#   corepack enable || true
-#   # optional: common global tools
-#   # npm -g install typescript eslint yarn pnpm || true
-# '
+#   # Enable native overlay diff engine
+#   echo "options overlay metacopy=off redirect_dir=off" | sudo tee /etc/modprobe.d/disable-overlay-redirect-dir.conf >/dev/null
+#   sudo modprobe -r overlay
+#   sudo modprobe overlay
+#   sysen docker
+# fi
+# echo "[✓] Docker Installed."
 
 # --- Bluetooth --------
 if [[ "$ENABLE_BLUETOOTH" == "1" ]]; then
@@ -215,12 +198,3 @@ if [[ "$ENABLE_CUPS" == "1" ]]; then
   $AUR_HELPER $AUR_ARGS -S cups cups-pdf system-config-printer
   sysen cups
 fi
-
-# Configure Runtimes/DevTools Env Variables
-mise use -g uv@latest pipx@latest python@latest
-mise use -g go@latest
-mise use -g rust@latest
-#mise use -g node@latest
-#mise use -g terraform@latest opentofu@latest terragrunt@latest
-#mise use -g ansible@latest
-#mise use -g helm@latest helmfile@latest

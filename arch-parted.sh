@@ -32,7 +32,7 @@ DISK=""
 ESP_LABEL="EFI"
 ROOT_LABEL="root"
 FS_TYPE="ext4" 
-RESERVE_PERCENT=10
+RESERVE_PERCENT=0
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 

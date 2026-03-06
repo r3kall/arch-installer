@@ -1,4 +1,6 @@
 # ---- Hyprland packages ----
+uwsm
+libnewt
 xdg-desktop-portal-hyprland
 hyprutils
 hyprlang
