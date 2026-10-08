@@ -1,0 +1,24 @@
+# Trusted Bash configuration. Copy to install.conf and edit.
+# File assignments take precedence over environment variables.
+USER_NAME=arch
+HOST_NAME=linux
+ROOT_PASSWORD=root
+USER_PASSWORD=admin
+TIMEZONE=Europe/Rome
+LOCALE='en_US.UTF-8 UTF-8'
+KEYMAP=it
+TARGET=/mnt
+
+# One shared installation type, or independent selectors for each tool.
+INSTALL_PROFILE=default
+# ACONFMGR_PROFILE=workstation
+# CHEZMOI_PROFILE=personal
+
+# Set these to your repositories before restoring.
+ACONFMGR_REPO=''
+CHEZMOI_REPO=''
+# A subdirectory inside the aconfmgr repo, e.g. configurations/workstation.
+ACONFMGR_CONFIG_SUBDIR=.
+# Optional independent chezmoi checkout/config. Paths are for the installed user.
+# CHEZMOI_SOURCE=/home/arch/.local/share/chezmoi-personal
+# CHEZMOI_CONFIG=/home/arch/.config/chezmoi/personal.toml

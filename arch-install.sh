@@ -1,203 +1,122 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Never trace password input, including when invoked with bash -x.
+set +x
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-# Note: Arch Linux installation images do not support Secure Boot.
-# You will need to disable Secure Boot to boot the installation medium.
-# If desired, Secure Boot can be set up after completing the installation.
-
-
-# ===== User variables =====
-USER_NAME="${USER_NAME:-arch}"
-HOST_NAME="${HOST_NAME:-linux}"
-ROOT_PASSWORD="${ROOT_PASSWORD:-root}"
-USER_PASSWORD="${USER_PASSWORD:-admin}"
-TIMEZONE="${TIMEZONE:-Europe/Rome}"
-LOCALE="${LOCALE:-en_US.UTF-8 UTF-8}"
-KEYMAP="${KEYMAP:-it}"
-SWAP_SIZE_GB="${SWAP_SIZE_GB:-0}"  # set >0 to create a swapfile of that size
-
-#### Commands
-die(){ echo "ERROR: $*" >&2; exit 1; }
-ch()  { arch-chroot /mnt "$@"; }
-pac() { arch-chroot /mnt pacman --noconfirm --needed -S "$@"; }
-sl()  { sleep 2; }
-is_virtualized() { systemd-detect-virt -q; }
-virt_what() { systemd-detect-virt 2>/dev/null || true; }
-gpu_vendor() { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
-
-
-init() {
-  ping -c 1 -W 5 archlinux.org &>/dev/null || die "No network. Connect before running."
-  timedatectl set-ntp true
-  # Log everything
-  exec &> >(tee -a "/var/log/install.log")
-  # set -x
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+ch() { arch-chroot "$TARGET" "$@"; }
+usage() {
+  cat <<HELP
+Usage: ${0##*/} [--config FILE] --disk DEVICE [--fs ext4|btrfs] [--reserve N] [--yes]
+       ${0##*/} [--config FILE] --mounted
+Install a console-ready UEFI/GRUB system. --mounted uses existing mounts.
+Configuration is trusted Bash; see install.conf.example. --config must come first.
+HELP
 }
 
-partitioning () {
-  [[ -x ./arch-parted.sh ]] || die "arch-parted.sh missing."
-  ./arch-parted.sh
-  sl
-}
-
-system_install () {
-  # Update mirrors
-  # NOTE: '--sort rate' gives nb-errors, slow down entire installation process
-  reflector -c Italy,Germany,France -l 16 -p https --save /etc/pacman.d/mirrorlist
-  sleep 8
-
-  # Install essential packages
-  # NOTE: if virtual machine or container, 'linux-firmware' is not necessary
-  pacstrap /mnt base base-devel linux linux-headers
-  if ! is_virtualized; then pacstrap /mnt linux-firmware; fi
-
-  sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
-  sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
-
-  # Generate an fstab file
-  # genfstab -U /mnt >> /mnt/etc/fstab
-
-  # Set root password
-  ( echo "${ROOT_PASSWORD}"; echo "${ROOT_PASSWORD}" ) | ch passwd
-
-  ## Timezone settings
-  ch ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
-  echo ${TIMEZONE} > /mnt/etc/timezone
+install_system() {
+  local fs=$1
+  local -a packages=(base linux linux-firmware mkinitcpio networkmanager sudo git chezmoi grub efibootmgr)
+  [[ $fs != btrfs ]] || packages+=(btrfs-progs)
+  if grep -q GenuineIntel /proc/cpuinfo; then
+    packages+=(intel-ucode)
+  elif grep -q AuthenticAMD /proc/cpuinfo; then packages+=(amd-ucode); fi
+  pacstrap -K "$TARGET" "${packages[@]}"
+  genfstab -U "$TARGET" >"$TARGET/etc/fstab"
+  ch ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
   ch hwclock --systohc
-
-  ## Locale settings
-  # Uncomment needed locales with sed and generate them
-  sed -i "s/^#$LOCALE/$LOCALE/" /mnt/etc/locale.gen
-  # Create the locale.conf file, and set the LANG variable accordingly
-  echo "LANG=$(echo $LOCALE | awk '{print $1}')" > /mnt/etc/locale.conf
-  # Make the changes on keyboard layout persistent in vconsole.conf
-  echo "KEYMAP=${KEYMAP}" > /mnt/etc/vconsole.conf
+  grep -Fxq "#${LOCALE}" "$TARGET/etc/locale.gen" || grep -Fxq "$LOCALE" "$TARGET/etc/locale.gen" || die "Locale not available: $LOCALE"
+  # Exact matching avoids interpreting locale punctuation as regex syntax.
+  awk -v locale="$LOCALE" '$0 == "#" locale {$0=locale} {print}' "$TARGET/etc/locale.gen" >"$TARGET/etc/locale.gen.new"
+  mv "$TARGET/etc/locale.gen.new" "$TARGET/etc/locale.gen"
+  printf 'LANG=%s\n' "${LOCALE%% *}" >"$TARGET/etc/locale.conf"
+  printf 'KEYMAP=%s\n' "$KEYMAP" >"$TARGET/etc/vconsole.conf"
+  printf '%s\n' "$HOST_NAME" >"$TARGET/etc/hostname"
   ch locale-gen
-
-  # Create the hostname file
-  echo $HOST_NAME > /mnt/etc/hostname
-  # Add matching entries to hosts
-  echo "# The following lines are desirable for IPv4 capable hosts" >> /mnt/etc/hosts
-  echo "127.0.0.1         localhost" >> /mnt/etc/hosts
-  echo "# The following lines are desirable for IPv6 capable hosts" >> /mnt/etc/hosts
-  echo "::1               localhost ip6-localhost ip6-loopback" >> /mnt/etc/hosts
-  echo "ff02::1           ip6-allnodes" >> /mnt/etc/hosts
-  echo "ff02::2           ip6-allrouters" >> /mnt/etc/hosts
-
-  ## Install tools
-  pac archlinux-keyring
-  pac linux-tools pacman-contrib man-db man-pages texinfo dialog nano git parted reflector rsync
-
-  # Install microcodes (if possible)
-  !(hostnamectl | grep Virtualization) && grep GenuineIntel /proc/cpuinfo &>/dev/null && pac intel-ucode
-  !(hostnamectl | grep Virtualization) && grep AuthenticAMD /proc/cpuinfo &>/dev/null && pac amd-ucode
-
-  # Install NetworkManager
-  pac networkmanager
+  ch useradd -m -G wheel -s /bin/bash "$USER_NAME"
+  printf '%%wheel ALL=(ALL:ALL) ALL\n' >"$TARGET/etc/sudoers.d/10-wheel"
+  chmod 440 "$TARGET/etc/sudoers.d/10-wheel"
+  ch visudo -cf /etc/sudoers
+  printf 'root:%s\n%s:%s\n' "$ROOT_PASSWORD" "$USER_NAME" "$USER_PASSWORD" | ch chpasswd
   ch systemctl enable NetworkManager.service
-  
-  # GPU drivers
-  if lspci | grep -E "VGA|3D|Display" | grep -qi nvidia; then
-    pac nvidia nvidia-utils
-  elif lspci | grep -E "VGA|3D|Display" | grep -qi intel; then
-    pac mesa vulkan-intel intel-media-driver
-  elif lspci | grep -E "VGA|3D|Display" | grep -qi amd; then
-    pac mesa vulkan-radeon libva-mesa-driver mesa-vdpau
-  else
-    pac mesa
-  fi
-
-  sl
-}
-
-# Initramfs
-initramfs() {
-  local _hooks="HOOKS=(base udev keyboard keymap consolefont autodetect modconf block filesystems)"
-  ch sed -i "s/^HOOKS.*/$_hooks/g" /etc/mkinitcpio.conf
+  # Keep the package's default mkinitcpio hooks.
   ch mkinitcpio -P
-  sl
-}
-
-# Boot loader - GRUB
-bootloader_grub() {
-  pac dosfstools efibootmgr freetype2 fuse2 mtools os-prober grub btrfs-progs
   ch grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=arch
   ch grub-mkconfig -o /boot/grub/grub.cfg
-  sl
+  local handoff="$TARGET/home/$USER_NAME/arch-installer"
+  mkdir -p "$handoff"
+  install -m 755 "$SCRIPT_DIR/arch-post.sh" "$handoff/arch-post.sh"
+  # Copy restoration settings only, never passwords or the input file.
+  local variable
+  : >"$handoff/restore.conf"
+  for variable in INSTALL_PROFILE ACONFMGR_PROFILE CHEZMOI_PROFILE ACONFMGR_REPO ACONFMGR_CONFIG_SUBDIR CHEZMOI_REPO CHEZMOI_SOURCE CHEZMOI_CONFIG; do
+    if [[ -v $variable ]]; then printf '%s=%q\n' "$variable" "${!variable}" >>"$handoff/restore.conf"; fi
+  done
+  ch chown -R "$USER_NAME:$USER_NAME" "/home/$USER_NAME/arch-installer"
+  echo "Installation complete. Mounts remain available for inspection."
+  echo "Unmount with: umount -R $TARGET; then reboot."
+  echo "After login: cd ~/arch-installer && ./arch-post.sh --config restore.conf"
 }
 
-# Boot loader - bootctl
-bootloader_bootctl() {
-
-  if ch bootctl is-installed > /dev/null
-  then
-    echo "systemd already installed"
-    ch mkdir -p /boot/loader/entries
-  else
-    ch bootctl install
+main() {
+  if [[ ${1:-} == --config ]]; then
+    (($# >= 2)) && [[ -f $2 ]] || die "--config requires a readable file"
+    # shellcheck disable=SC1090
+    source "$2"
+    shift 2
   fi
-
-  printf "default arch.conf\ntimeout 4\n" > /mnt/boot/loader/loader.conf
-  # Change ucode if needed
-  printf "title   Arch Linux\nlinux   /vmlinuz-linux\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch.conf
-  printf "title   Arch Linux\nlinux   /vmlinuz-linux\ninitrd  /intel-ucode.img\ninitrd  /initramfs-linux-fallback.img\noptions root=\"LABEL=root\" rw\n" > /mnt/boot/loader/entries/arch-fallback.conf
-  ch bootctl status
-  sl
-}
-
-# User configuration
-user_install() {
-  echo "Starting user installation."
-  # Add a new user, create its home directory and add it to the indicated groups
-  ch useradd -mG wheel,uucp,input,optical,storage,network ${USER_NAME}
-
-  # Add sudoer privileges
-  # sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL)\s\+ALL\)/\1/' /mnt/etc/sudoers
-  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
-  ch chmod 440 /etc/sudoers.d/10-wheel
-  # Set user password
-  ( echo "${USER_PASSWORD}"; echo "${USER_PASSWORD}" ) | ch passwd ${USER_NAME}
-
-  pac xdg-user-dirs xdg-utils
-  printf "DESKTOP=Desktop\nDOWNLOAD=Downloads\nDOCUMENTS=Documents\nMUSIC=Music\nPICTURES=Pictures\nVIDEOS=Videos\n" > /mnt/etc/xdg/user-dirs.defaults
-  ch xdg-user-dirs-update
-
-  # Set XDG env variables
-  echo "" >> /mnt/etc/profile
-  echo "# XDG Base Directory specification" >> /mnt/etc/profile
-  echo "# https://wiki.archlinux.org/index.php/XDG_Base_Directory"  >> /mnt/etc/profile
-  echo "export XDG_CONFIG_HOME=\$HOME/.config" >> /mnt/etc/profile
-  echo "export XDG_CACHE_HOME=\$HOME/.cache" >> /mnt/etc/profile
-  echo "export XDG_DATA_HOME=\$HOME/.local/share" >> /mnt/etc/profile
-
-  # Install virtualbox addons (if needed)
-  # hostnamectl | grep Virtualization | grep oracle && $CH $PM virtualbox-guest-utils
-  local VIRT_KIND="$(virt_what)"
-  if is_virtualized; then
-    pac qemu-guest-agent spice-vdagent
-    ch systemctl enable qemu-guest-agent
-    echo "[i] Virtualization detected (${VIRT_KIND:-unknown})"
-  else
-	  echo "[i] Bare-metal or guest agent disabled (${VIRT_KIND:-unknown})"
+  if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+    usage
+    return
   fi
-  sl
+  USER_NAME=${USER_NAME:-arch}
+  HOST_NAME=${HOST_NAME:-linux}
+  ROOT_PASSWORD=${ROOT_PASSWORD:-root}
+  USER_PASSWORD=${USER_PASSWORD:-admin}
+  TIMEZONE=${TIMEZONE:-Europe/Rome}
+  LOCALE=${LOCALE:-en_US.UTF-8 UTF-8}
+  KEYMAP=${KEYMAP:-it}
+  TARGET=${TARGET:-/mnt}
+  INSTALL_PROFILE=${INSTALL_PROFILE:-default}
+  ACONFMGR_PROFILE=${ACONFMGR_PROFILE:-$INSTALL_PROFILE}
+  CHEZMOI_PROFILE=${CHEZMOI_PROFILE:-$INSTALL_PROFILE}
+  [[ $ACONFMGR_PROFILE =~ ^[a-zA-Z0-9_-]+$ && $CHEZMOI_PROFILE =~ ^[a-zA-Z0-9_-]+$ ]] || die "Invalid profile name"
+  local mounted=no
+  if [[ ${1:-} == --mounted ]]; then
+    mounted=yes
+    shift
+    (($# == 0)) || die "--mounted takes no partition options"
+  fi
+  [[ $EUID == 0 ]] || die "Run as root from the Arch ISO"
+  [[ -d /run/archiso && -d /sys/firmware/efi ]] || die "Use an Arch ISO booted in UEFI mode"
+  [[ $USER_NAME =~ ^[a-z_][a-z0-9_-]*$ && $USER_NAME != root ]] || die "Invalid user name"
+  [[ $HOST_NAME =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || die "Invalid host name"
+  [[ $TARGET == /* && $TARGET != / ]] || die "Invalid target directory"
+  [[ $TIMEZONE != /* && $TIMEZONE != *..* && -f /usr/share/zoneinfo/$TIMEZONE ]] || die "Invalid timezone"
+  [[ $LOCALE =~ ^[a-zA-Z0-9_.@-]+\ UTF-8$ ]] || die "Use a UTF-8 locale, e.g. en_US.UTF-8 UTF-8"
+  [[ $KEYMAP =~ ^[a-zA-Z0-9_-]+$ ]] || die "Invalid keymap"
+  [[ $ROOT_PASSWORD != *$'\n'* && $USER_PASSWORD != *$'\n'* ]] || die "Passwords cannot contain newlines"
+  local command
+  for command in pacstrap genfstab arch-chroot findmnt timedatectl curl; do
+    command -v "$command" >/dev/null || die "Missing command: $command"
+  done
+  curl -fsS --connect-timeout 10 --max-time 30 https://archlinux.org/ -o /dev/null
+  timedatectl set-ntp true
+  if [[ $mounted == no ]]; then
+    "$SCRIPT_DIR/arch-parted.sh" "$@" --target "$TARGET"
+  fi
+  mountpoint -q "$TARGET" && mountpoint -q "$TARGET/boot" || die "Mount root at $TARGET and ESP at $TARGET/boot"
+  [[ $(findmnt -nro FSTYPE -M "$TARGET/boot") == vfat ]] || die "ESP must be FAT32"
+  local fs
+  fs=$(findmnt -nro FSTYPE -M "$TARGET")
+  [[ $fs == ext4 || $fs == btrfs ]] || die "Only ext4 and Btrfs root filesystems are supported"
+  [[ ! -e $TARGET/etc/os-release ]] || die "Target already contains an OS; refusing to overwrite it"
+  install_system "$fs"
+
 }
 
-main () {
-  init
-  partitioning
-  system_install
-  initramfs
-  bootloader_grub
-  user_install
-  
-  # System update
-  ch pacman -Syyuq --noconfirm
-}
-
-time main
-cp /var/log/install.log /mnt/var/log
-
-umount -R /mnt/boot
-umount -R /mnt
-echo "Installation complete. You can now reboot."
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi

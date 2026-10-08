@@ -1,322 +1,120 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Arch disk partitioner
-#
-# Features:
-# - GPT with EFI System Partition (1GiB)
-# - Keeps a fraction of disk unallocated (default 10%)
-# - ext4 layout: single root partition
-# - Btrfs layout:
-#     @           -> /
-#     @home       -> /home
-#     @pkg        -> /var/cache/pacman/pkg        (no snapshots)
-#     @log        -> /var/log                     (no snapshots)
-#     @cache      -> /var/cache                   (no snapshots)
-#     @tmp        -> /var/tmp                     (ephemeral)
-#     @vm         -> /var/lib/vm                  (no-COW)
-#     @containers -> /var/lib/containers          (no-COW)
-#     @snapshots  -> /.snapshots
-#
-# Mount options (Btrfs):
-#   - global:      noatime,space_cache=v2,discard=async
-#   - root/home:   + compress=zstd:3,autodefrag,ssd
-#   - pkg/log/cache/tmp: + ssd (no autodefrag, no compression)
-#   - vm/containers: noatime,space_cache=v2,discard=async,ssd,nodatacow
-#
-# No Swap (swapfile may be created later).
-
-SCRIPT_NAME="${0##*/}"
-
 DISK=""
-ESP_LABEL="EFI"
-ROOT_LABEL="root"
-FS_TYPE="ext4" 
+FS_TYPE=ext4
 RESERVE_PERCENT=0
+AUTO_YES=no
+TARGET=/mnt
 
 die() { echo "ERROR: $*" >&2; exit 1; }
-
 usage() {
-  cat <<EOF
-$SCRIPT_NAME - Partition disk for Arch (ext4 or Btrfs)
-
-Usage:
-  sudo $SCRIPT_NAME [options]
-
-Options:
-  -d, --disk DEVICE        Target disk, e.g. /dev/nvme0n1, /dev/sda
-  -f, --fs TYPE            Filesystem: ext4 or btrfs (default: btrfs)
-  -r, --reserve PERCENT    Percent of disk to leave unallocated (default: 15)
-  -y, --yes                Do not prompt for confirmation
-  -h, --help               Show this help
-EOF
-}
-
-check_root() {
-  if [[ $EUID -ne 0 ]]; then
-    die "Run as root."
-  fi
-}
-
-check_uefi() {
-  if ! [[ -f /sys/firmware/efi/fw_platform_size ]]; then
-    die "UEFI firmware not detected. This script assumes UEFI boot."
-  fi
-}
-
-select_disk() {
-  if [[ -n "$DISK" ]]; then
-    [[ -b "$DISK" ]] || die "Disk $DISK does not exist."
-    return
-  fi
-
-  echo "Available disks:"
-  lsblk -d -o NAME,SIZE,TYPE,MODEL | awk '$3 == "disk"'
-  echo
-  read -rp "Enter target disk (e.g. /dev/nvme0n1 or /dev/sda): " DISK
-  [[ -b "$DISK" ]] || die "Disk $DISK does not exist."
-}
-
-part_prefix() {
-  # Handle /dev/sdX vs /dev/nvme0n1 vs /dev/vdX
-  local d="$1"
-  if [[ "$d" =~ nvme || "$d" =~ mmcblk ]]; then
-    echo "${d}p"
-  else
-    echo "${d}"
-  fi
-}
-
-confirm() {
-  local auto_yes="$1"
-  if [[ "$auto_yes" == "yes" ]]; then
-    return
-  fi
-
-  echo "About to DESTROY all data on $DISK"
-  echo "Filesystem: $FS_TYPE"
-  echo "Reserved unallocated space: ${RESERVE_PERCENT}%"
-  read -rp "Continue? [y/N]: " ans
-  case "$ans" in
-    y|Y) ;;
-    *) die "Aborted by user." ;;
-  esac
-}
-
-partition_disk() {
-  local alloc_percent=$((100 - RESERVE_PERCENT))
-  (( alloc_percent > 0 && alloc_percent <= 100 )) \
-    || die "Invalid reserve percent: $RESERVE_PERCENT"
-
-  echo "== Creating GPT and partitions on $DISK =="
-  # Wipe and create new GPT
-  wipefs -a "$DISK"
-  partprobe "$DISK" || true
-  parted -s "$DISK" mklabel gpt
-
-  # 1MiB alignment, 1GiB EFI
-  parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
-  parted -s "$DISK" set 1 esp on
-
-  # Root from 1GiB to alloc_percent% of disk
-  parted -s "$DISK" mkpart ROOT "${FS_TYPE}" 1025MiB "${alloc_percent}%"
-  partprobe "$DISK" || true
-
-  partpref="$(part_prefix "$DISK")"
-  ESP="${partpref}1"
-  ROOT="${partpref}2"
-}
-
-mkfs_ext4() {
-  echo "== Creating filesystems (ext4) =="
-  mkfs.fat -F32 "$ESP" -n "$ESP_LABEL"
-  mkfs.ext4 -F "$ROOT" -L "$ROOT_LABEL"
-}
-
-mkfs_btrfs() {
-  echo "== Creating filesystems (Btrfs) =="
-  mkfs.fat -F32 "$ESP" -n "$ESP_LABEL"
-  mkfs.btrfs -f -L "$ROOT_LABEL" "$ROOT"
-}
-
-setup_ext4_mounts() {
-  echo "== Mounting ext4 root =="
-  mount "$ROOT" /mnt
-  mkdir -p /mnt/boot
-  mount "$ESP" /mnt/boot
-
-  echo "== Generating /mnt/etc/fstab via genfstab =="
-  mkdir -p /mnt/etc
-  genfstab -U /mnt > /mnt/etc/fstab
-}
-
-create_btrfs_subvolumes() {
-  echo "== Creating Btrfs subvolumes =="
-  # Mount the raw volume temporarily to create subvolumes
-  mount "$ROOT" /mnt
-
-  btrfs subvolume create /mnt/@
-  btrfs subvolume create /mnt/@home
-  btrfs subvolume create /mnt/@pkg
-  btrfs subvolume create /mnt/@log
-  btrfs subvolume create /mnt/@cache
-  btrfs subvolume create /mnt/@tmp
-  btrfs subvolume create /mnt/@vm
-  btrfs subvolume create /mnt/@containers
-  btrfs subvolume create /mnt/@snapshots
-
-  umount /mnt
-}
-
-setup_btrfs_mounts() {
-  echo "== Mounting Btrfs subvolumes =="
-
-  local BASE_OPTS="noatime,ssd,space_cache=v2,discard=async"
-  local COMPRESS="compress=zstd:3"
-
-  # Root (@) with compression + autodefrag
-  mount -o "subvol=@,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt
-
-  mkdir -p \
-    /mnt/boot \
-    /mnt/home \
-    /mnt/var/cache/pacman/pkg \
-    /mnt/var/log \
-    /mnt/var/cache \
-    /mnt/var/tmp \
-    /mnt/var/lib/vm \
-    /mnt/var/lib/containers \
-    /mnt/.snapshots
-
-  # Home: similar to root
-  mount -o "subvol=@home,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/home
-
-  # pkg/log/cache/tmp
-  mount -o "subvol=@pkg,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/cache/pacman/pkg
-  mount -o "subvol=@log,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/log
-  mount -o "subvol=@cache,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/cache
-  mount -o "subvol=@tmp,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/var/tmp
-
-  # vm/containers: no-COW via nodatacow, and no compression
-  mount -o "subvol=@vm,${BASE_OPTS},nodatacow" "$ROOT" /mnt/var/lib/vm
-  mount -o "subvol=@containers,${BASE_OPTS},nodatacow" "$ROOT" /mnt/var/lib/containers
-
-  # snapshots
-  mount -o "subvol=@snapshots,${BASE_OPTS},${COMPRESS}" "$ROOT" /mnt/.snapshots
-
-  # EFI
-  mount "$ESP" /mnt/boot
-
-  echo "== Applying chattr +C (NOCOW attribute) to VM/containers directories =="
-  # This ensures future files inside these directories are created without COW,
-  # complementing the nodatacow mount options.
-  for d in /mnt/var/lib/vm /mnt/var/lib/containers; do
-    if [[ -d "$d" ]]; then
-      if ! chattr +C "$d"; then
-        echo "WARNING: failed to set NOCOW (chattr +C) on $d" >&2
-      fi
-    fi
-  done
-
-  echo "== Generating /mnt/etc/fstab for Btrfs layout =="
-  mkdir -p /mnt/etc
-
-  local ESP_UUID ROOT_UUID
-  ESP_UUID=$(blkid -s UUID -o value "$ESP")
-  ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
-
-  cat > /mnt/etc/fstab <<EOF
-# Static information about the filesystems.
-# See fstab(5) for details.
-
-# <file system> <dir> <type> <options> <dump> <pass>
-# EFI System Partition
-UUID=${ESP_UUID}  /boot         vfat    umask=0077                               0  2
-# Btrfs root and subvolumes
-UUID=${ROOT_UUID}  /             btrfs   ${BASE_OPTS},${COMPRESS},subvol=@          0  0
-UUID=${ROOT_UUID}  /home         btrfs   ${BASE_OPTS},${COMPRESS},subvol=@home      0  0
-UUID=${ROOT_UUID}  /var/cache/pacman/pkg  btrfs   ${BASE_OPTS},${COMPRESS},subvol=@pkg           0  0
-UUID=${ROOT_UUID}  /var/log      btrfs   ${BASE_OPTS},${COMPRESS},subvol=@log                    0  0
-UUID=${ROOT_UUID}  /var/cache    btrfs   ${BASE_OPTS},${COMPRESS},subvol=@cache                  0  0
-UUID=${ROOT_UUID}  /var/tmp      btrfs   ${BASE_OPTS},${COMPRESS},subvol=@tmp                    0  0
-UUID=${ROOT_UUID}  /var/lib/vm   btrfs   ${BASE_OPTS},nodatacow,subvol=@vm                       0  0
-UUID=${ROOT_UUID}  /var/lib/containers  btrfs   ${BASE_OPTS},nodatacow,subvol=@containers        0  0
-UUID=${ROOT_UUID}  /.snapshots   btrfs   ${BASE_OPTS},${COMPRESS},subvol=@snapshots 0  0
-EOF
-}
-
-print_summary() {
-  echo
-  echo "== Partition and mount summary =="
-  lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS "$DISK"
-
-  echo
-  echo "Remember to generate /etc/fstab after installing the base system, e.g.:"
-  echo "  genfstab -U /mnt >> /mnt/etc/fstab"
-  echo
-  if [[ "$FS_TYPE" == "btrfs" ]]; then
-    cat <<EOF
-Recommended /etc/fstab Btrfs options (already used for initial mounts):
-
-  root (@):      ${base_opts:-noatime,space_cache=v2,discard=async},ssd,compress=zstd:3
-  /home (@home): same as root
-  pkg/log/cache/tmp: noatime,space_cache=v2,discard=async,ssd
-  vm/containers: noatime,space_cache=v2,discard=async,ssd,nodatacow
-
-Note: nodatacow disables CoW and compression for these subvolumes,
-which is ideal for VM images and container layers.
-EOF
-  fi
+  cat <<HELP
+Usage: ${0##*/} --disk DEVICE [options]
+Erase one disk, create GPT with a 1 GiB ESP, and mount it for installation.
+  -d, --disk DEVICE       Required whole disk (all data will be erased)
+  -f, --fs TYPE           ext4 (default) or btrfs (@ and @home)
+  -r, --reserve PERCENT   Leave 0..90 percent unallocated (default: 0)
+      --target PATH      Mount directory (default: /mnt)
+  -y, --yes               Skip the erase confirmation
+  -h, --help              Show this help
+HELP
 }
 
 parse_args() {
-  local auto_yes="no"
-
-  while [[ $# -gt 0 ]]; do
+  while (($#)); do
     case "$1" in
-      -d|--disk)
-        DISK="$2"; shift 2;;
-      -f|--fs)
-        FS_TYPE="$2"; shift 2;;
-      -r|--reserve)
-        RESERVE_PERCENT="$2"; shift 2;;
-      -y|--yes)
-        auto_yes="yes"; shift;;
-      -h|--help)
-        usage; exit 0;;
-      *)
-        die "Unknown argument: $1";;
+      -d|--disk|-f|--fs|-r|--reserve|--target)
+        (($# >= 2)) && [[ -n $2 && $2 != -* ]] || die "Missing value for $1"
+        case "$1" in
+          -d|--disk) DISK=$2;;
+          -f|--fs) FS_TYPE=$2;;
+          -r|--reserve) RESERVE_PERCENT=$2;;
+          --target) TARGET=$2;;
+        esac
+        shift 2;;
+      -y|--yes) AUTO_YES=yes; shift;;
+      -h|--help) usage; exit 0;;
+      *) die "Unknown argument: $1";;
     esac
   done
+  [[ -n $DISK ]] || die "--disk is required"
+  [[ $FS_TYPE == ext4 || $FS_TYPE == btrfs ]] || die "Use ext4 or btrfs"
+  [[ $RESERVE_PERCENT =~ ^[0-9]{1,2}$ ]] || die "Reserve must be an integer from 0 to 90"
+  RESERVE_PERCENT=$((10#$RESERVE_PERCENT))
+  ((RESERVE_PERCENT <= 90)) || die "Reserve must be from 0 to 90"
+  [[ $TARGET == /* && $TARGET != / ]] || die "Target must be an absolute directory other than /"
+}
 
-  case "$FS_TYPE" in
-    ext4|btrfs) ;;
-    *) die "Unsupported filesystem type: $FS_TYPE (use ext4 or btrfs)";;
-  esac
+check_disk() {
+  [[ $EUID == 0 ]] || die "Run as root"
+  [[ -d /sys/firmware/efi ]] || die "Boot the installation medium in UEFI mode"
+  DISK=$(readlink -f -- "$DISK")
+  [[ -b $DISK && $(lsblk -dnro TYPE "$DISK") == disk ]] || die "Not a whole disk: $DISK"
+  [[ -z $(lsblk -nrpo MOUNTPOINTS "$DISK" | tr -d '[:space:]') ]] || die "Disk has mounted filesystems or active swap"
+  [[ -z $(lsblk -nrpo TYPE "$DISK" | sed '1d' | sed '/^part$/d') ]] || die "Disk has active device-mapper/RAID users"
+  ! mountpoint -q "$TARGET" || die "Target is already mounted: $TARGET"
+  [[ ! -d $TARGET || -z $(ls -A -- "$TARGET") ]] || die "Target directory is not empty"
+  local bytes command
+  bytes=$(lsblk -bdnro SIZE "$DISK")
+  ((bytes * (100 - RESERVE_PERCENT) / 100 > 5 * 1024 * 1024 * 1024)) || die "Allocated space must exceed 5 GiB"
+  for command in wipefs parted partprobe udevadm mkfs.fat mount umount; do
+    command -v "$command" >/dev/null || die "Missing command: $command"
+  done
+  command -v "mkfs.$FS_TYPE" >/dev/null || die "Missing mkfs.$FS_TYPE"
+  if [[ $FS_TYPE == btrfs ]]; then command -v btrfs >/dev/null || die "Missing btrfs"; fi
+}
 
-  echo "$auto_yes"
+confirm() {
+  lsblk -o NAME,SIZE,MODEL,FSTYPE,MOUNTPOINTS "$DISK"
+  echo "DESTROY all data on $DISK; filesystem=$FS_TYPE; reserve=$RESERVE_PERCENT%"
+  if [[ $AUTO_YES != yes ]]; then
+    local answer
+    read -r -p "Type $DISK to erase it: " answer
+    [[ $answer == "$DISK" ]] || die "Aborted"
+  fi
+}
+
+partition_disk() {
+  wipefs -a "$DISK"
+  parted -s "$DISK" mklabel gpt
+  parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
+  parted -s "$DISK" set 1 esp on
+  # mkfs chooses the actual filesystem; ext4 is only parted's type hint.
+  parted -s "$DISK" mkpart ROOT ext4 1025MiB "$((100 - RESERVE_PERCENT))%"
+  partprobe "$DISK"
+  udevadm settle
+  local esp root
+  esp=$(lsblk -nrpo NAME,PARTN "$DISK" | awk '$2 == 1 {print $1}')
+  root=$(lsblk -nrpo NAME,PARTN "$DISK" | awk '$2 == 2 {print $1}')
+  [[ -b $esp && -b $root ]] || die "Partition devices did not appear"
+  mkfs.fat -F32 -n EFI "$esp"
+  mkdir -p "$TARGET"
+  if [[ $FS_TYPE == ext4 ]]; then
+    mkfs.ext4 -F -L root "$root"
+    mount "$root" "$TARGET"
+  else
+    mkfs.btrfs -f -L root "$root"
+    mount "$root" "$TARGET"
+    btrfs subvolume create "$TARGET/@"
+    btrfs subvolume create "$TARGET/@home"
+    umount "$TARGET"
+    mount -o subvol=@,noatime,compress=zstd:3 "$root" "$TARGET"
+    mkdir -p "$TARGET/home"
+    mount -o subvol=@home,noatime,compress=zstd:3 "$root" "$TARGET/home"
+  fi
+  mkdir -p "$TARGET/boot"
+  mount -o umask=0077 "$esp" "$TARGET/boot"
+  lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS "$DISK"
+  echo "Mounted at $TARGET. The installer generates fstab after pacstrap."
 }
 
 main() {
-  check_root
-  check_uefi
-
-  auto_yes="$(parse_args "$@")"
-
-  select_disk
-  confirm "$auto_yes"
+  # Parse in this shell so variables survive.
+  parse_args "$@"
+  check_disk
+  confirm
   partition_disk
-
-  if [[ "$FS_TYPE" == "ext4" ]]; then
-    mkfs_ext4
-    setup_ext4_mounts
-  else
-    mkfs_btrfs
-    create_btrfs_subvolumes
-    setup_btrfs_mounts
-  fi
-
-  print_summary
 }
 
-main "$@"
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi

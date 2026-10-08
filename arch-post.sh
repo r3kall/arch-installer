@@ -1,200 +1,69 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_NAME=${0##*/}
-SCRIPT_DIR=$(cd -- "${BASH_SOURCE%/*}" 2>/dev/null && pwd)
-echo "Starting $SCRIPT_NAME in $SCRIPT_DIR."
+die() { echo "ERROR: $*" >&2; exit 1; }
+usage() {
+  cat <<HELP
+Usage: ${0##*/} [--config FILE]
+Run as your normal user after first boot. Restore aconfmgr, then chezmoi.
+Set ACONFMGR_REPO (or an existing ACONFMGR_DIR) and CHEZMOI_REPO.
+INSTALL_PROFILE defaults to default; ACONFMGR_PROFILE and CHEZMOI_PROFILE override it.
+Configuration is trusted Bash; see README.md. --config must come first.
+HELP
+}
 
-RUN_ID="$(date +%Y%m%d-%H%M%S)"
-LOG="${LOG:-/var/log/${SCRIPT_NAME%.sh}-${RUN_ID}.log}"
-# Create log file as root before redirects
-sudo touch "$LOG"
-sudo chmod 600 "$LOG"
-# Redirect ALL output to the log AND to console
-exec > >(sudo tee -a "$LOG") 2>&1
-# enable tracing
-set -x
-
-# --- Globals / Profiles ---
-TARGET_USER="${TARGET_USER:-${USER:-}}"
-TARGET_HOME="${TARGET_HOME:-${HOME:-}}"
-WINDOW_MANAGER="${WINDOW_MANAGER:-hyprland}"	# hyprland|wayfire|cosmic|none
-DISPLAY_MANAGER="${DISPLAY_MANAGER:-ly}"		# sddm|ly|none
-ENABLE_BLUETOOTH="${ENABLE_BLUETOOTH:-0}"		# 1|0
-ENABLE_CUPS="${ENABLE_CUPS:-0}"					# 1|0
-
-AUR_HELPER="${AUR_HELPER:-paru}"				# paru|yay
-AUR_ARGS="${AUR_ARGS:---noconfirm --needed --skipreview}" # extra args
-
-DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/r3kall/dotfiles}"
-DOTFILES_DIR="${DOTFILES_DIR:-$TARGET_HOME/.dotfiles}"  # bare repo dir
-
-# --- Helpers ---
-pac()		{ sudo pacman --noconfirm --needed -S "$@"; }
-sysen()	{ sudo systemctl enable "$@"; }
-
-# (Optional)
-is_virtualized() { systemd-detect-virt -q; }
-virt_what()		   { systemd-detect-virt 2>/dev/null || true; }
-gpu_vendor()	   { lspci -nnk | awk '/VGA|3D|Display/{print tolower($0)}'; }
-
-install_aur_packages() {
-  if [[ -n "$AUR_LIST" && -f "$AUR_LIST" ]]; then
-    echo "[i] Installing AUR packages from $AUR_LIST ..."
-    $AUR_HELPER $AUR_ARGS -S $(cat $AUR_LIST | grep -vE '^\s*#' | sed '/^\s*$/d' | tr '\n' ' ')
-    echo "[✓] Packages from $AUR_LIST installed."
-  else
-    echo "[!] AUR_LIST not provided or file not found."
-    exit 1
+main() {
+  if [[ ${1:-} == --config ]]; then
+    (($# >= 2)) && [[ -f $2 ]] || die "--config requires a readable file"
+    # shellcheck disable=SC1090
+    source "$2"
+    shift 2
   fi
-}
-
-# --- Cleanup & traps ---------------------------------------------------------
-_cleanup_ran=0
-cleanup() {
-  local reason="${1:-EXIT}"
-  local code="${2:-0}"
-  local cmd="${3:-}"
-  local line="${4:-}"
-
-  [[ $_cleanup_ran -eq 1 ]] && return 0
-
-  _cleanup_ran=1
-  if [[ "$reason" == "ERR" ]]; then
-    echo "[!] Error (exit $code) at line $line: $cmd"
-    echo "[!] See log: $LOG"
-  else
-    echo "[✓] Post Install finished with $reason ($code)."
-    echo "[i] Log: $LOG"
+  if [[ ${1:-} == --help || ${1:-} == -h ]]; then usage; return; fi
+  (($# == 0)) || die "Unknown argument: $1"
+  [[ $EUID != 0 ]] || die "Run as your normal user, without sudo"
+  INSTALL_PROFILE=${INSTALL_PROFILE:-default}
+  export ACONFMGR_PROFILE=${ACONFMGR_PROFILE:-$INSTALL_PROFILE}
+  CHEZMOI_PROFILE=${CHEZMOI_PROFILE:-$INSTALL_PROFILE}
+  [[ $ACONFMGR_PROFILE =~ ^[a-zA-Z0-9_-]+$ && $CHEZMOI_PROFILE =~ ^[a-zA-Z0-9_-]+$ ]] || die "Profiles must contain only letters, numbers, _ or -"
+  ACONFMGR_DIR=${ACONFMGR_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/aconfmgr}
+  ACONFMGR_CONFIG_SUBDIR=${ACONFMGR_CONFIG_SUBDIR:-.}
+  local config_dir="$ACONFMGR_DIR/$ACONFMGR_CONFIG_SUBDIR"
+  [[ -n ${CHEZMOI_REPO:-} ]] || die "Set CHEZMOI_REPO to your chezmoi repository"
+  [[ -d $ACONFMGR_DIR || -n ${ACONFMGR_REPO:-} ]] || die "Set ACONFMGR_REPO or provide an existing ACONFMGR_DIR"
+  sudo pacman -Syu --needed git chezmoi base-devel
+  if [[ ! -d $ACONFMGR_DIR ]]; then
+    mkdir -p "$(dirname -- "$ACONFMGR_DIR")"
+    git clone -- "$ACONFMGR_REPO" "$ACONFMGR_DIR"
   fi
-}
-
-trap 'cleanup ERR "$?" "$BASH_COMMAND" "$LINENO"' ERR
-trap 'cleanup TERM "$?"' TERM
-trap 'cleanup EXIT "$?"' EXIT
-
-# --- Begin ---
-
-echo "[i] Starting Post Install ..."
-sudo timedatectl set-ntp true
-
-# Network probe
-ping -c 1 -W 5 www.google.com >/dev/null
-
-# Mirror refresh (best effort)
-if ! command -v reflector >/dev/null; then pac reflector; fi
-reflector -c Italy,Germany -p https -l 16 --sort rate | sudo tee /etc/pacman.d/mirrorlist
-
-echo "[i] Upgrading full system ..."
-sudo pacman -Syu --noconfirm
-
-# --- Dotfiles --------
-bootstrap_dotfiles() {
-  echo "[i] Bootstrapping dotfiles for ${TARGET_USER} from ${DOTFILES_REPO} ..."
-  if [[ ! -d "$DOTFILES_DIR" ]]; then
-    git clone --bare "$DOTFILES_REPO" "$DOTFILES_DIR"
+  [[ -d $config_dir ]] || die "Missing aconfmgr configuration: $config_dir"
+  compgen -G "$config_dir/*.sh" >/dev/null || die "No aconfmgr configuration scripts in $config_dir"
+  local aconfmgr_bin
+  if command -v aconfmgr >/dev/null; then
+    aconfmgr_bin=$(command -v aconfmgr)
   else
-    echo "[i] Dotfiles bare repo already exists at $DOTFILES_DIR"
-    git --git-dir="$DOTFILES_DIR" remote set-url origin "$DOTFILES_REPO" || true
-    git --git-dir="$DOTFILES_DIR" fetch --all --prune
+    local tool_dir="${XDG_DATA_HOME:-$HOME/.local/share}/aconfmgr-tool"
+    if [[ ! -d $tool_dir ]]; then
+      mkdir -p "$(dirname -- "$tool_dir")"
+      git clone -- https://github.com/CyberShadow/aconfmgr.git "$tool_dir"
+    fi
+    aconfmgr_bin="$tool_dir/aconfmgr"
+    [[ -x $aconfmgr_bin ]] || die "Missing aconfmgr executable: $aconfmgr_bin"
   fi
-  git --git-dir="$DOTFILES_DIR" --work-tree="$HOME" checkout
-  git --git-dir="$DOTFILES_DIR" --work-tree="$HOME" config status.showUntrackedFiles no
-  echo "[✓] Dotfiles deployed."
-}
-bootstrap_dotfiles
-
-if [[ -f "$HOME/.config/shell/env.sh" ]]; then
-  source "$HOME/.config/shell/env.sh"
-fi
-
-# --- Install AUR helper --------
-if ! command -v ${AUR_HELPER} >/dev/null 2>&1; then
-  echo "[i] Installing ${AUR_HELPER} as ${TARGET_USER} ..."
-  pac ccache
-  sudo sed -i 's/^#\?MAKEFLAGS=.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
-  sudo sed -i 's/^#\?BUILDENV=.*/BUILDENV=(!distcc color ccache check !sign)/' /etc/makepkg.conf
-
-  TMPDIR="${TMPDIR:-/var/tmp}"
-  tmp="$(mktemp -d -p $TMPDIR $AUR_HELPER.XXXXXX)"
-  cd "$tmp"
-  git clone --depth=1 https://aur.archlinux.org/$AUR_HELPER.git
-  cd "$AUR_HELPER"
-  makepkg -sri --noconfirm --needed
-
-  [[ -f "/etc/${AUR_HELPER}.conf" ]] && \
-    sudo sed -i -e 's/^#BottomUp/BottomUp/' -e 's/^#SudoLoop/SudoLoop/' "/etc/$AUR_HELPER.conf"
-fi
-echo "[✓] AUR Helper Installed."
-
-AUR_LIST="$SCRIPT_DIR/pkgs-base.txt" install_aur_packages
-fc-cache -f
-chsh -s "/usr/bin/zsh" || true
-mkdir -p "$XDG_CACHE_HOME/zsh" || true
-
-dw_shell() {
-  $AUR_HELPER $AUR_ARGS -S noctalia-shell cava cliphist wlsunset matugen
+  echo "Applying aconfmgr profile $ACONFMGR_PROFILE from $config_dir"
+  "$aconfmgr_bin" -c "$config_dir" --aur-helper makepkg --paranoid apply
+  # Separate source/config paths allow independent dotfiles repositories too.
+  local -a chezmoi_cmd=(chezmoi)
+  [[ -z ${CHEZMOI_SOURCE:-} ]] || chezmoi_cmd+=(--source "$CHEZMOI_SOURCE")
+  [[ -z ${CHEZMOI_CONFIG:-} ]] || chezmoi_cmd+=(--config "$CHEZMOI_CONFIG")
+  # init persists data.profile through the repository's config template.
+  "${chezmoi_cmd[@]}" init --prompt --promptString "profile=$CHEZMOI_PROFILE" -- "$CHEZMOI_REPO"
+  local selected
+  selected=$("${chezmoi_cmd[@]}" execute-template '{{ .profile }}')
+  [[ $selected == "$CHEZMOI_PROFILE" ]] || die "Your .chezmoi.toml.tmpl must store the profile prompt in [data].profile; see README.md"
+  "${chezmoi_cmd[@]}" diff
+  "${chezmoi_cmd[@]}" --interactive apply
+  echo "Restored system profile $ACONFMGR_PROFILE and dotfiles profile $CHEZMOI_PROFILE."
 }
 
-echo "WM: $WINDOW_MANAGER"
-# --- Window Manager -------
-case "$WINDOW_MANAGER" in
-  "hyprland")
-	echo "[i] Installing Hyprland ..."
-  AUR_LIST="$SCRIPT_DIR/pkgs-hyprland.txt" install_aur_packages
-	;;
-  "niri")
-	echo "[i] Installing Niri ..."
-	AUR_LIST="$SCRIPT_DIR/pkgs-niri.txt" install_aur_packages
-  dw_shell
-	;;
-  "none")
-	echo "[i] Skip Window Manager installation ..."
-	;;
-  *)
-	echo "[!] Invalid Window Manager." >&2
-	;;
-esac
-
-# --- Display Manager -----
-case "$DISPLAY_MANAGER" in
-  "sddm")
-	# Check sddm them at https://framagit.org/MarianArlt/sddm-sugar-candy
-	pac sddm
-	sysen sddm
-	;;
-  "ly")
-	pac ly
-	sysen ly@tty2.service
-  sudo systemctl disable getty@tty2.service
-	;;
-  *)
-	echo "[!] Invalid Display Manager." >&2
-	;;
-esac
-
-# --- Docker --------
-# if ! command -v docker >/dev/null 2>&1; then
-#   pac docker
-#   sudo groupadd -f docker
-#   sudo usermod -aG docker $TARGET_USER
-
-#   # Enable native overlay diff engine
-#   echo "options overlay metacopy=off redirect_dir=off" | sudo tee /etc/modprobe.d/disable-overlay-redirect-dir.conf >/dev/null
-#   sudo modprobe -r overlay
-#   sudo modprobe overlay
-#   sysen docker
-# fi
-# echo "[✓] Docker Installed."
-
-# --- Bluetooth --------
-if [[ "$ENABLE_BLUETOOTH" == "1" ]]; then
-  $AUR_HELPER $AUR_ARGS -S bluez bluez-utils blueman
-  sysen bluetooth
-fi
-
-# --- Printing --------
-if [[ "$ENABLE_CUPS" == "1" ]]; then
-  $AUR_HELPER $AUR_ARGS -S cups cups-pdf system-config-printer
-  sysen cups
-fi
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi
