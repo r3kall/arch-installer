@@ -172,21 +172,6 @@ These configurations still target your home directory: coordinate overlapping
 files. When setting these paths in the ISO's install config, use explicit paths
 for the installed user; `$HOME` there refers to the ISO user.
 
-## Migration and validation
-
-The old `pkgs-*.txt` lists are retained under `migration/` as references and are
-not installed by these scripts. Port your desired explicit packages and services
-into aconfmgr, and your bare Git dotfiles into chezmoi, before restoring.
-
-```bash
-bash -n arch-install.sh arch-parted.sh arch-post.sh
-python -m unittest discover -s tests -v
-```
-
-Tests use mocks and temporary directories, including a real chezmoi fixture if
-chezmoi is installed. They do not format disks, install packages, or boot a VM.
-Bootability still needs verification on an actual installation.
-
 References: [Arch installation guide](https://wiki.archlinux.org/title/Installation_guide),
 [aconfmgr](https://github.com/CyberShadow/aconfmgr),
 [chezmoi init](https://www.chezmoi.io/reference/commands/init/),
